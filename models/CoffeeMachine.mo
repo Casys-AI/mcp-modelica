@@ -1,3 +1,11 @@
+model IdealControlledHeatFlow
+  "Ideal controlled heat-flow source without temperature dependence"
+  Modelica.Blocks.Interfaces.RealInput Q_flow(unit = "W");
+  Modelica.Thermal.HeatTransfer.Interfaces.HeatPort_b port;
+equation
+  port.Q_flow = -Q_flow;
+end IdealControlledHeatFlow;
+
 model CoffeeMachine
   "Lumped electro-thermal CoffeeMachine boiler model for the Casys v1 kit."
   import SI = Modelica.Units.SI;
@@ -12,38 +20,41 @@ model CoffeeMachine
   parameter SI.Temperature setpointTemperature = 366.15;
   parameter SI.TemperatureDifference hysteresis = 2;
 
-  parameter SI.HeatCapacity totalHeatCapacity =
-    waterMass * waterSpecificHeatCapacity + boilerHeatCapacity
-    "Lumped water and boiler thermal capacity";
-
+  Modelica.Thermal.HeatTransfer.Components.HeatCapacitor water(
+    C = waterMass * waterSpecificHeatCapacity + boilerHeatCapacity,
+    T(start = initialWaterTemperature, fixed = true));
+  Modelica.Thermal.HeatTransfer.Components.ThermalConductor losses(
+    G = heatLossConductance);
+  Modelica.Thermal.HeatTransfer.Sources.FixedTemperature ambient(
+    T = ambientTemperature);
+  // MSL PrescribedHeatFlow's optional alpha causes a zero-division tear in
+  // OpenModelica at initialization. This ideal source is its alpha-free form.
+  IdealControlledHeatFlow heater;
   Modelica.Blocks.Logical.Hysteresis thermostat(
     uLow = setpointTemperature - hysteresis / 2,
     uHigh = setpointTemperature + hysteresis / 2);
   Modelica.Blocks.Logical.Not heaterEnabled;
   Modelica.Blocks.Math.BooleanToReal heaterCommand(realTrue = 1, realFalse = 0);
   Modelica.Blocks.Math.Gain heaterGain(k = heaterPowerRated);
+  Modelica.Blocks.Continuous.Integrator heaterEnergy(y_start = 0);
 
-  SI.Temperature waterTemperature(start = initialWaterTemperature, fixed = true);
   output Real waterTemperatureC(unit = "degC");
   output SI.Power heaterPowerW;
-  output SI.Energy heaterEnergyJ(start = 0, fixed = true);
+  output SI.Energy heaterEnergyJ;
   output Real heaterOn(unit = "1");
 
 equation
-  // A transparent first-order energy balance is more appropriate here than a
-  // heat-port source: this v1 kit models a single lumped boiler/water state.
-  // It also avoids an artificial source-temperature initialization constraint.
-  der(waterTemperature) =
-    (heaterPowerW - heatLossConductance * (waterTemperature - ambientTemperature)) /
-    totalHeatCapacity;
-  der(heaterEnergyJ) = heaterPowerW;
-
-  thermostat.u = waterTemperature;
+  connect(water.port, losses.port_a);
+  connect(losses.port_b, ambient.port);
+  thermostat.u = water.T;
   connect(thermostat.y, heaterEnabled.u);
   connect(heaterEnabled.y, heaterCommand.u);
   connect(heaterCommand.y, heaterGain.u);
+  connect(heaterGain.y, heater.Q_flow);
+  connect(heaterGain.y, heaterEnergy.u);
 
-  waterTemperatureC = waterTemperature - 273.15;
+  waterTemperatureC = water.T - 273.15;
   heaterPowerW = heaterGain.y;
+  heaterEnergyJ = heaterEnergy.y;
   heaterOn = heaterCommand.y;
 end CoffeeMachine;
