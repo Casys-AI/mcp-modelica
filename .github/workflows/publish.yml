@@ -30,7 +30,9 @@ jobs:
           deno task fmt
           deno task lint
           deno task test
-      - name: Verify pinned OpenModelica environment
-        run: docker build --target verify .
+      - name: Build and verify the HTTP runtime image
+        run: docker build --target final --tag mcp-modelica:runtime-check .
+      - name: Verify the HTTP runtime entrypoint
+        run: bash scripts/smoke-container-http.sh mcp-modelica:runtime-check
       - name: Publish package and provenance
         run: deno publish

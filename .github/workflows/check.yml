@@ -25,7 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-      - run: docker build --target verify .
+      - name: Build verified runtime image
+        run: docker build --target final --tag mcp-modelica:runtime-check .
+      - name: Verify the HTTP runtime entrypoint
+        run: bash scripts/smoke-container-http.sh mcp-modelica:runtime-check
 
   openmodelica-arm64:
     runs-on: ubuntu-latest
