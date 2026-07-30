@@ -96,6 +96,10 @@ jobs:
             org.opencontainers.image.licenses=MIT
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # The ARM64 verification runs under QEMU. This build-stage-only input
+          # leaves the server's 30 s runtime default unchanged.
+          build-args: |
+            OMC_INTEGRATION_TIMEOUT_MS=120000
 
       - name: Attest the published image
         uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
