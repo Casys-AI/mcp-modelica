@@ -14,6 +14,13 @@ Deno.test({
         model_id: "coffee-machine-v1",
         scenario_id: "heat-up-nominal",
       });
+      if (run.status !== "succeeded") {
+        const diagnostics = await Deno.readTextFile(`${directory}/${run.run_id}/omc.log`);
+        throw new Error(
+          `OpenModelica CoffeeMachine run returned '${run.status}'.\n` +
+            `${diagnostics}\nWarnings: ${run.warnings.join(" | ")}`,
+        );
+      }
       assertEquals(run.status, "succeeded");
       assertEquals(run.metrics.water_temperature_max.unit, "degC");
       assertEquals(run.metrics.heater_energy.unit, "J");
