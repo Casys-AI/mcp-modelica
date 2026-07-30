@@ -52,13 +52,13 @@ if (import.meta.main) {
   console.error(`[mcp-modelica] Server ready (${toolsClient.count} tools).`);
 }
 
-export interface CliOptions {
+interface CliOptions {
   http: boolean;
   port: number;
   hostname: string;
 }
 
-export function parseCli(args: readonly string[]): CliOptions {
+function parseCli(args: readonly string[]): CliOptions {
   let http = false;
   let transportWasExplicit = false;
   let port = DEFAULT_HTTP_PORT;
