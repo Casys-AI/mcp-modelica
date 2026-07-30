@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import { createModelicaService } from "../src/domain/service.ts";
 
 const enabled = Deno.env.get("RUN_OMC_INTEGRATION") === "1";
@@ -24,6 +24,14 @@ Deno.test({
       assertEquals(run.status, "succeeded");
       assertEquals(run.metrics.water_temperature_max.unit, "degC");
       assertEquals(run.metrics.heater_energy.unit, "J");
+      assert(
+        run.metrics.water_temperature_max.value >= 90,
+        "The nominal CoffeeMachine model must actually reach its 90 degC target.",
+      );
+      assert(
+        "time_to_target_temperature" in run.metrics,
+        "A successful nominal run must report its target-reaching time.",
+      );
       console.log(JSON.stringify({
         engine: run.engine,
         metrics: run.metrics,

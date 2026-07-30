@@ -46,6 +46,7 @@ model CoffeeMachine
 equation
   connect(water.port, losses.port_a);
   connect(losses.port_b, ambient.port);
+  connect(heater.port, water.port);
   thermostat.u = water.T;
   connect(thermostat.y, heaterEnabled.u);
   connect(heaterEnabled.y, heaterCommand.u);
