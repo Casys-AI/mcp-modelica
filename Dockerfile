@@ -1,20 +1,26 @@
 # Dedicated, reproducible Modelica sidecar. It deliberately does not extend
 # engineering-toolchain: OpenModelica/MSL have their own release and disk budget.
-FROM openmodelica/openmodelica:v1.27.0-minimal AS runtime
+FROM openmodelica/openmodelica@sha256:80fbff1a66fb6a6ade64a158415a45e022363249982c9f3ade07df2a369a357e AS runtime
 
 ARG MSL_COMMIT=8ae3d35c24e519cb2996cab20f3b13daf2b0c50a
+ARG MSL_TARBALL_SHA256=b402903aefd4f1397364e3ae1992bb99080ce935ab9a426d3bcdb47e4da8eeb6
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
-# The commit, not a floating branch or runtime download, pins MSL 4.1.0.
+# The commit and archive SHA, not a floating branch or runtime download, pin
+# MSL 4.1.0. Keep this check because GitHub source archives are external input.
 RUN mkdir -p /opt/modelica-libraries \
     && curl --fail --location --silent --show-error \
+      --output /tmp/modelica-standard-library.tar.gz \
       "https://github.com/modelica/ModelicaStandardLibrary/archive/${MSL_COMMIT}.tar.gz" \
-      | tar -xz --strip-components=1 -C /opt/modelica-libraries
+    && echo "${MSL_TARBALL_SHA256}  /tmp/modelica-standard-library.tar.gz" | sha256sum -c - \
+    && tar -xzf /tmp/modelica-standard-library.tar.gz --strip-components=1 \
+      -C /opt/modelica-libraries \
+    && rm /tmp/modelica-standard-library.tar.gz
 
-COPY --from=denoland/deno:bin-2.9.4 /deno /usr/local/bin/deno
+COPY --from=denoland/deno@sha256:25675bd2a125b59bdcfbb6592ec5c332a2bc56e0dabf038184d8b2c6aec45c3b /deno /usr/local/bin/deno
 WORKDIR /app
 COPY deno.json deno.lock mod.ts server.ts ./
 COPY src ./src

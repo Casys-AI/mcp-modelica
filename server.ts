@@ -22,7 +22,7 @@ export async function createModelicaServer(
   const toolsClient = new ModelicaToolsClient(service);
   const server = new ConcurrentMCPServer({
     name: "mcp-modelica",
-    version: "0.1.0",
+    version: "0.1.1",
     maxConcurrent: 1,
     backpressureStrategy: "queue",
     validateSchema: true,
@@ -52,20 +52,31 @@ if (import.meta.main) {
   console.error(`[mcp-modelica] Server ready (${toolsClient.count} tools).`);
 }
 
-interface CliOptions {
+export interface CliOptions {
   http: boolean;
   port: number;
   hostname: string;
 }
 
-function parseCli(args: readonly string[]): CliOptions {
+export function parseCli(args: readonly string[]): CliOptions {
   let http = false;
+  let transportWasExplicit = false;
   let port = DEFAULT_HTTP_PORT;
   let hostname = "127.0.0.1";
   for (let index = 0; index < args.length; index++) {
     const argument = args[index];
     if (argument === "--http") {
+      if (transportWasExplicit && !http) {
+        throw new TypeError("Choose either --http or --stdio, not both.");
+      }
       http = true;
+      transportWasExplicit = true;
+    } else if (argument === "--stdio") {
+      if (transportWasExplicit && http) {
+        throw new TypeError("Choose either --http or --stdio, not both.");
+      }
+      http = false;
+      transportWasExplicit = true;
     } else if (argument.startsWith("--port=")) {
       port = positivePort(argument.slice("--port=".length));
     } else if (argument === "--port") {

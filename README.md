@@ -70,10 +70,11 @@ deno task test:omc
 
 ## Container
 
-The `Dockerfile` derives from the official OpenModelica 1.27.0 minimal image
-and pins Modelica Standard Library 4.1.0 by commit. It exposes HTTP MCP on
-port 3016 and has no Docker socket, no shared CAD-export volume, and no
-runtime library download.
+The `Dockerfile` pins the OpenModelica and Deno base-image indices by digest,
+then verifies the Modelica Standard Library 4.1.0 archive by commit and SHA-256.
+It exposes HTTP MCP on port 3016 and has no Docker socket, no shared
+CAD-export volume, and no runtime library download. Release deployments use a
+published GHCR image digest, never a mutable Docker tag.
 
 Build and publish the image only after `deno task test:omc` passes. Until then,
 this package is intentionally not added to the Casys fleet or Compose stack.
