@@ -2,6 +2,7 @@ import { assert, assertEquals } from "@std/assert";
 import { createModelicaService } from "../src/domain/service.ts";
 
 const enabled = Deno.env.get("RUN_OMC_INTEGRATION") === "1";
+const integrationTimeoutMs = readIntegrationTimeoutMs();
 
 Deno.test({
   name: "CoffeeMachine runs through a real pinned OpenModelica environment",
@@ -13,6 +14,7 @@ Deno.test({
       const run = await service.simulate({
         model_id: "coffee-machine-v1",
         scenario_id: "heat-up-nominal",
+        timeout_ms: integrationTimeoutMs,
       });
       if (run.status !== "succeeded") {
         const diagnostics = await Deno.readTextFile(`${directory}/${run.run_id}/omc.log`);
@@ -45,3 +47,16 @@ Deno.test({
     }
   },
 });
+
+function readIntegrationTimeoutMs(): number {
+  const configured = Deno.env.get("OMC_INTEGRATION_TIMEOUT_MS");
+  if (configured === undefined) return 30_000;
+
+  const timeoutMs = Number(configured);
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120_000) {
+    throw new Error(
+      "OMC_INTEGRATION_TIMEOUT_MS must be an integer between 1 and 120000.",
+    );
+  }
+  return timeoutMs;
+}

@@ -37,8 +37,9 @@ RUN mkdir -p /runs
 # Build-time proof: a container image is not valid until its pinned OMC/MSL
 # pair has actually compiled and run the shipped CoffeeMachine model.
 FROM runtime AS verify
+ARG OMC_INTEGRATION_TIMEOUT_MS=30000
 COPY tests ./tests
-RUN RUN_OMC_INTEGRATION=1 deno task test:omc
+RUN RUN_OMC_INTEGRATION=1 OMC_INTEGRATION_TIMEOUT_MS="${OMC_INTEGRATION_TIMEOUT_MS}" deno task test:omc
 RUN mkdir -p /verification && touch /verification/omc-smoke-passed
 
 FROM runtime AS final
