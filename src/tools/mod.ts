@@ -48,6 +48,22 @@ export function createModelicaTools(service: ModelicaService): ModelicaTool[] {
       handler: async (args) => await service.simulate(args),
     },
     {
+      name: "modelica_run_list",
+      description:
+        "List up to 20 persisted Modelica run summaries in deterministic run_id order. " +
+        "Use modelica_run_get for the metrics and artifact ledger. This is read-only: it does not " +
+        "rerun, alter, or delete simulation evidence.",
+      category: "simulation",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          limit: { type: "integer", minimum: 1, maximum: 20 },
+        },
+      },
+      handler: async (args) => await service.listRuns(args.limit),
+    },
+    {
       name: "modelica_run_get",
       description:
         "Read the immutable record, metrics and artifact hashes for a run returned by modelica_simulate. " +

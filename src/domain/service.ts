@@ -7,6 +7,7 @@ import { extractCoffeeMachineMetrics } from "./metrics.ts";
 import type {
   Artifact,
   ModelicaKit,
+  ModelicaRunSummary,
   PublicKit,
   Quantity,
   RunnerOutput,
@@ -44,6 +45,41 @@ export class ModelicaService {
     return this.registry.list().map(toPublicKit);
   }
 
+  /**
+   * List persisted simulation records without rerunning, deleting, or
+   * otherwise modifying their evidence. The order is deliberately based on
+   * the immutable run identifier rather than filesystem timestamps.
+   */
+  async listRuns(rawLimit: unknown = MAX_STORED_RUNS): Promise<ModelicaRunSummary[]> {
+    const limit = parseRunListLimit(rawLimit);
+    let entries: Deno.DirEntry[];
+    try {
+      entries = [];
+      for await (const entry of Deno.readDir(this.runsDirectory)) entries.push(entry);
+    } catch (error) {
+      if (error instanceof Deno.errors.NotFound) return [];
+      throw error;
+    }
+
+    const runIds = entries
+      .filter((entry) => entry.isDirectory && RUN_ID.test(entry.name))
+      .map((entry) => entry.name)
+      .sort();
+    const runs: ModelicaRunSummary[] = [];
+    for (const runId of runIds) {
+      try {
+        runs.push(toRunSummary(await this.getRun(runId)));
+      } catch (error) {
+        // A concurrent list can observe the directory before simulate has
+        // atomically published its final run.json. It is not a stored run yet.
+        if (error instanceof RunNotFoundError) continue;
+        throw error;
+      }
+      if (runs.length === limit) break;
+    }
+    return runs;
+  }
+
   async simulate(rawInput: unknown): Promise<SimulationRun> {
     const input = parseSimulateInput(rawInput);
     const kit = this.registry.require(input.model_id);
@@ -66,6 +102,7 @@ export class ModelicaService {
     await this.ensureRunCapacity();
     const runDirectory = join(this.runsDirectory, runId);
     await Deno.mkdir(runDirectory, { recursive: true });
+    const startedAt = new Date().toISOString();
 
     const artifacts: Artifact[] = [];
     await this.writeArtifact(
@@ -165,6 +202,8 @@ export class ModelicaService {
     const run: SimulationRun = {
       status,
       run_id: runId,
+      started_at: startedAt,
+      completed_at: new Date().toISOString(),
       fingerprint,
       model: { id: kit.id, version: kit.version, sha256: modelHash },
       scenario: { id: scenario.id, sha256: scenarioHash },
@@ -174,7 +213,7 @@ export class ModelicaService {
       artifacts,
       warnings,
     };
-    await Deno.writeTextFile(join(runDirectory, "run.json"), stableJson(run));
+    await this.writeRunRecord(runDirectory, run);
     return run;
   }
 
@@ -207,6 +246,13 @@ export class ModelicaService {
       sha256: await sha256(contents),
       bytes: new TextEncoder().encode(contents).byteLength,
     });
+  }
+
+  private async writeRunRecord(directory: string, run: SimulationRun): Promise<void> {
+    const runPath = join(directory, "run.json");
+    const temporaryPath = `${runPath}.tmp`;
+    await Deno.writeTextFile(temporaryPath, stableJson(run));
+    await Deno.rename(temporaryPath, runPath);
   }
 
   private async ensureRunCapacity(): Promise<void> {
@@ -273,6 +319,18 @@ function toPublicKit(kit: ModelicaKit): PublicKit {
   };
 }
 
+function toRunSummary(run: SimulationRun): ModelicaRunSummary {
+  return {
+    status: run.status,
+    run_id: run.run_id,
+    ...(run.started_at === undefined ? {} : { started_at: run.started_at }),
+    ...(run.completed_at === undefined ? {} : { completed_at: run.completed_at }),
+    fingerprint: run.fingerprint,
+    model: run.model,
+    scenario: run.scenario,
+  };
+}
+
 function toPublicScenario(scenario: ModelicaKit["scenarios"][number]) {
   return {
     id: scenario.id,
@@ -326,6 +384,20 @@ function parseSimulateInput(value: unknown): SimulateInput {
     ...(Object.keys(overrides).length > 0 ? { parameter_overrides: overrides } : {}),
     ...(timeoutMs === undefined ? {} : { timeout_ms: timeoutMs }),
   };
+}
+
+function parseRunListLimit(value: unknown): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value < 1 ||
+    value > MAX_STORED_RUNS
+  ) {
+    throw new ValidationError(
+      `limit must be an integer between 1 and ${MAX_STORED_RUNS}.`,
+    );
+  }
+  return value;
 }
 
 function resolveParameters(kit: ModelicaKit, overrides: Record<string, Quantity>) {

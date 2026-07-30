@@ -3,7 +3,7 @@ import { ModelicaToolsClient } from "../src/client.ts";
 import { createModelicaService } from "../src/domain/service.ts";
 import { FakeRunner } from "./test-helpers.ts";
 
-Deno.test("MCP surface is a small closed set of three Modelica tools", async () => {
+Deno.test("MCP surface is a small closed set of four Modelica tools", async () => {
   const directory = await Deno.makeTempDir({ prefix: "mcp-modelica-tools-" });
   try {
     const service = await createModelicaService({
@@ -14,11 +14,13 @@ Deno.test("MCP surface is a small closed set of three Modelica tools", async () 
     assertEquals(client.toMCPFormat().map((tool) => tool.name), [
       "modelica_kit_list",
       "modelica_simulate",
+      "modelica_run_list",
       "modelica_run_get",
     ]);
     const handlers = client.buildHandlersMap();
     const catalog = await handlers.get("modelica_kit_list")!({});
     assertEquals((catalog as Array<{ id: string }>)[0].id, "coffee-machine-v1");
+    assertEquals(await handlers.get("modelica_run_list")!({}), []);
   } finally {
     await Deno.remove(directory, { recursive: true });
   }

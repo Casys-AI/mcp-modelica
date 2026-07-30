@@ -59,7 +59,7 @@ Deno.test("--stdio serves a real MCP initialize and tools/list exchange", async 
     serverInfo?: { name?: string; version?: string };
   };
   const tools = responses.find((response) => response.id === 2)?.result as {
-    tools?: Array<{ name: string }>;
+    tools?: Array<{ name: string; inputSchema?: Record<string, unknown> }>;
   };
 
   assertEquals(initialized.serverInfo?.name, "mcp-modelica");
@@ -70,8 +70,19 @@ Deno.test("--stdio serves a real MCP initialize and tools/list exchange", async 
   assertEquals(tools.tools?.map((tool) => tool.name), [
     "modelica_kit_list",
     "modelica_simulate",
+    "modelica_run_list",
     "modelica_run_get",
   ]);
+  assertEquals(
+    tools.tools?.find((tool) => tool.name === "modelica_run_list")?.inputSchema,
+    {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        limit: { type: "integer", minimum: 1, maximum: 20 },
+      },
+    },
+  );
   assert(
     !decoder.decode(output.stderr).includes("HTTP server listening"),
     "--stdio must not start the HTTP transport.",

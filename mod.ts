@@ -8,6 +8,7 @@ export type {
   Artifact,
   EngineIdentity,
   ModelicaKit,
+  ModelicaRunSummary,
   ParameterDefinition,
   PublicKit,
   Quantity,
