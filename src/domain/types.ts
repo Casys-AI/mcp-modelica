@@ -112,6 +112,10 @@ export interface Artifact {
 export interface SimulationRun {
   status: RunStatus;
   run_id: string;
+  /** Present for records created by current versions; absent on legacy run.json files. */
+  started_at?: string;
+  /** Present for records created by current versions; absent on legacy run.json files. */
+  completed_at?: string;
   fingerprint: string;
   model: {
     id: string;
@@ -127,4 +131,17 @@ export interface SimulationRun {
   metrics: Record<string, Quantity>;
   artifacts: Artifact[];
   warnings: string[];
+}
+
+/** The bounded, discovery-oriented projection returned by modelica_run_list. */
+export interface ModelicaRunSummary {
+  status: RunStatus;
+  run_id: string;
+  /** Present for records created by current versions; absent on legacy run.json files. */
+  started_at?: string;
+  /** Present for records created by current versions; absent on legacy run.json files. */
+  completed_at?: string;
+  fingerprint: string;
+  model: SimulationRun["model"];
+  scenario: SimulationRun["scenario"];
 }

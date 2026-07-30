@@ -22,7 +22,7 @@ export async function createModelicaServer(
   const toolsClient = new ModelicaToolsClient(service);
   const server = new ConcurrentMCPServer({
     name: "mcp-modelica",
-    version: "0.1.4",
+    version: "0.1.5",
     maxConcurrent: 1,
     backpressureStrategy: "queue",
     validateSchema: true,

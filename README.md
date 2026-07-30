@@ -24,6 +24,7 @@ requirement verdict.
 | --- | --- |
 | `modelica_kit_list` | Enumerate trusted kits, scenarios, bounds, units and metrics. |
 | `modelica_simulate` | Run an approved model/scenario and return evidence. |
+| `modelica_run_list` | Read up to 20 persisted run summaries in deterministic `run_id` order. |
 | `modelica_run_get` | Retrieve the immutable record of a prior run. |
 
 Example request:
@@ -39,16 +40,20 @@ Example request:
 }
 ```
 
-The returned record contains the model/scenario hashes, resolved parameters,
-CSV and JSON artifact hashes, and observations such as
-`water_temperature_max`, `time_to_target_temperature`, and `heater_energy`.
-If a target is not reached, the time metric is absent rather than invented;
-the requirement evaluator can therefore return `unresolved` or `fail` from a
-real rule.
+The returned record contains `started_at` and `completed_at` timestamps (for
+new records), the model/scenario hashes, resolved parameters, CSV and JSON
+artifact hashes, and observations such as `water_temperature_max`,
+`time_to_target_temperature`, and `heater_energy`. If a target is not reached,
+the time metric is absent rather than invented; the requirement evaluator can
+therefore return `unresolved` or `fail` from a real rule.
 
 Run storage is deliberately bounded: at most 20 retained runs and 5 MiB per
 CSV result. The server refuses a new run when evidence storage is full; it
 never silently deletes prior proof or lets an agent fill the host disk.
+`modelica_run_list` is read-only and accepts an optional `limit` from 1 to 20;
+it lists final persisted summaries lexicographically by `run_id`, not by
+mutable filesystem timestamps. Use `modelica_run_get` for the metric and
+artifact detail. Older records without timestamps remain readable.
 
 ## Development
 
