@@ -24,6 +24,14 @@ Deno.test({
       assertEquals(run.status, "succeeded");
       assertEquals(run.metrics.water_temperature_max.unit, "degC");
       assertEquals(run.metrics.heater_energy.unit, "J");
+      console.log(JSON.stringify({
+        engine: run.engine,
+        metrics: run.metrics,
+        model: run.model,
+        run_id: run.run_id,
+        scenario: run.scenario,
+        status: run.status,
+      }));
     } finally {
       await Deno.remove(directory, { recursive: true });
     }
