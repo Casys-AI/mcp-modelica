@@ -56,13 +56,17 @@ Deno.test("--stdio serves a real MCP initialize and tools/list exchange", async 
     JSON.parse(line) as { id?: number; result?: unknown }
   );
   const initialized = responses.find((response) => response.id === 1)?.result as {
-    serverInfo?: { name?: string };
+    serverInfo?: { name?: string; version?: string };
   };
   const tools = responses.find((response) => response.id === 2)?.result as {
     tools?: Array<{ name: string }>;
   };
 
   assertEquals(initialized.serverInfo?.name, "mcp-modelica");
+  const packageVersion = JSON.parse(
+    await Deno.readTextFile(new URL("../deno.json", import.meta.url)),
+  ) as { version: string };
+  assertEquals(initialized.serverInfo?.version, packageVersion.version);
   assertEquals(tools.tools?.map((tool) => tool.name), [
     "modelica_kit_list",
     "modelica_simulate",

@@ -28,7 +28,9 @@ jobs:
       - name: Build verified runtime image
         run: docker build --target final --tag mcp-modelica:runtime-check .
       - name: Verify the HTTP runtime entrypoint
-        run: bash scripts/smoke-container-http.sh mcp-modelica:runtime-check
+        run: >-
+          bash scripts/smoke-container-http.sh mcp-modelica:runtime-check
+          "$(node -p 'require(\"./deno.json\").version')"
 
   openmodelica-arm64:
     runs-on: ubuntu-latest
