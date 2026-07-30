@@ -22,7 +22,9 @@ COPY models ./models
 COPY scenarios ./scenarios
 RUN deno cache --frozen --minimum-dependency-age=0 server.ts
 
-ENV MODELICAPATH=/opt/modelica-libraries
+# OMC deliberately reads OPENMODELICALIBRARY rather than MODELICAPATH.
+# This directory contains only the MSL 4.1.0 source pinned above.
+ENV OPENMODELICALIBRARY=/opt/modelica-libraries
 ENV MODELICA_RUN_DIR=/runs
 RUN mkdir -p /runs
 
