@@ -1,6 +1,6 @@
 {
   "name": "@casys/mcp-modelica",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
@@ -11,6 +11,7 @@
       "mod.ts",
       "server.ts",
       "src/**/*.ts",
+      "src/ui/dist/**/*.html",
       "models/**/*.mo",
       "scenarios/**/*.json",
       "README.md",
@@ -23,20 +24,26 @@
       "**/*.test.ts"
     ]
   },
+  "minimumDependencyAge": {
+    "age": "P1D",
+    "exclude": ["jsr:@casys/mcp-server"]
+  },
   "tasks": {
-    "serve": "deno run --allow-read=models,scenarios,src,mcp-server.yaml --allow-write=runs --allow-run --allow-env --allow-net=127.0.0.1:3016 server.ts --http --port=3016",
-    "test": "deno test --allow-read --allow-write --allow-run --allow-env tests/",
+    "serve": "deno run --allow-read=models,scenarios,src,mcp-server.yaml --allow-write=runs --allow-run --allow-env --allow-net=127.0.0.1:3016 server.ts --port=3016",
+    "test": "deno test --allow-read --allow-write --allow-run --allow-env --allow-net=127.0.0.1 tests/ src/ui/results-viewer/src/model_test.ts",
+    "build:ui": "deno run --allow-read --allow-write --allow-run --allow-env --allow-net src/ui/results-viewer/build.ts",
     "test:omc": "RUN_OMC_INTEGRATION=1 deno test --allow-read --allow-write --allow-run --allow-env tests/omc_integration_test.ts",
     "check": "deno check mod.ts server.ts",
     "fmt": "deno fmt --check deno.json mod.ts server.ts src tests",
     "lint": "deno lint mod.ts server.ts src tests"
   },
   "imports": {
-    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.22.0",
+    "@casys/mcp-server": "jsr:@casys/mcp-server@0.24.1",
     "@std/assert": "jsr:@std/assert@^1.0.14",
     "@std/path": "jsr:@std/path@^1.1.0"
   },
   "fmt": {
+    "exclude": ["src/ui/dist"],
     "lineWidth": 100,
     "semiColons": true,
     "singleQuote": false

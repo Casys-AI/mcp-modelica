@@ -1,10 +1,10 @@
 /**
  * MCP bootstrap for approved OpenModelica simulation kits.
  *
- * Stdio is the default transport. HTTP mode is loopback-only by default and
+ * Stateless HTTP is the only transport. It is loopback-only by default and
  * Compose passes --hostname=0.0.0.0 inside the dedicated container.
  */
-import { ConcurrentMCPServer } from "@casys/mcp-server";
+import { McpApp, type RegisterViewersSummary } from "@casys/mcp-server";
 import { ModelicaToolsClient } from "./src/client.ts";
 import { createModelicaService, type ModelicaService } from "./src/domain/service.ts";
 
@@ -13,71 +13,143 @@ const DEFAULT_HTTP_PORT = 3016;
 export interface CreateModelicaServerOptions {
   service?: ModelicaService;
   logger?: (message: string) => void;
+  viewerFileSystem?: ResultsViewerFileSystem;
+  viewerModuleUrl?: string;
+}
+
+export interface ResultsViewerFileSystem {
+  exists(path: string): boolean;
+  readFile(path: string): string | Promise<string>;
+}
+
+export interface ModelicaServer {
+  server: McpApp;
+  toolsClient: ModelicaToolsClient;
+  viewerRegistration: RegisterViewersSummary;
 }
 
 export async function createModelicaServer(
   options: CreateModelicaServerOptions = {},
-): Promise<{ server: ConcurrentMCPServer; toolsClient: ModelicaToolsClient }> {
+): Promise<ModelicaServer> {
   const service = options.service ?? await createModelicaService();
   const toolsClient = new ModelicaToolsClient(service);
-  const server = new ConcurrentMCPServer({
+  const server = new McpApp({
     name: "mcp-modelica",
-    version: "0.1.5",
+    version: "0.2.0",
     maxConcurrent: 1,
     backpressureStrategy: "queue",
+    transport: "stateless",
     validateSchema: true,
     logger: options.logger ?? ((message) => console.error(`[mcp-modelica] ${message}`)),
   });
   server.registerTools(toolsClient.toMCPFormat(), toolsClient.buildHandlersMap());
-  return { server, toolsClient };
+  const viewerRegistration = registerResultsViewer(
+    server,
+    options.viewerFileSystem,
+    options.viewerModuleUrl,
+  );
+  return { server, toolsClient, viewerRegistration };
+}
+
+/**
+ * Registers the build output when present. A source checkout may not have a
+ * UI build yet, in which case McpApp reports `results-viewer` as skipped and
+ * the text/structured tool results remain fully usable.
+ */
+export function registerResultsViewer(
+  server: McpApp,
+  fileSystem: ResultsViewerFileSystem = defaultViewerFileSystem,
+  moduleUrl: string = import.meta.url,
+): RegisterViewersSummary {
+  return server.registerViewers({
+    prefix: "mcp-modelica",
+    viewers: ["results-viewer"],
+    moduleUrl,
+    exists: fileSystem.exists,
+    readFile: fileSystem.readFile,
+    humanName: () => "Modelica Results Viewer",
+  });
+}
+
+export function createResultsViewerFileSystem(
+  fetchViewer: (url: string) => Promise<Response> = (url) => fetch(url),
+): ResultsViewerFileSystem {
+  return {
+    exists(path) {
+      if (isRemoteViewerUrl(path)) return true;
+      try {
+        return Deno.statSync(path).isFile;
+      } catch (error) {
+        // The optional npm-style `ui-dist` path may sit outside the process's
+        // narrow source read permission. It is indistinguishable from an absent
+        // viewer for registration purposes and must not prevent text MCP tools
+        // from starting.
+        if (
+          error instanceof Deno.errors.NotFound ||
+          error instanceof Deno.errors.PermissionDenied ||
+          (error instanceof Error && error.name === "NotCapable")
+        ) {
+          return false;
+        }
+        throw error;
+      }
+    },
+    async readFile(path) {
+      if (!isRemoteViewerUrl(path)) return await Deno.readTextFile(path);
+      let response: Response;
+      try {
+        response = await fetchViewer(path);
+      } catch (error) {
+        throw new Error(`Unable to fetch Modelica results viewer from ${path}.`, { cause: error });
+      }
+      if (!response.ok) {
+        throw new Error(
+          `Unable to fetch Modelica results viewer from ${path}: HTTP ${response.status} ${response.statusText}.`,
+        );
+      }
+      return await response.text();
+    },
+  };
+}
+
+const defaultViewerFileSystem = createResultsViewerFileSystem();
+
+function isRemoteViewerUrl(path: string): boolean {
+  try {
+    const protocol = new URL(path).protocol;
+    return protocol === "https:" || protocol === "http:";
+  } catch {
+    return false;
+  }
 }
 
 if (import.meta.main) {
   const cli = parseCli(Deno.args);
   const { server, toolsClient } = await createModelicaServer();
-  if (cli.http) {
-    await server.startHttp({
-      port: cli.port,
-      hostname: cli.hostname,
-      cors: true,
-      onListen: (info) => {
-        console.error(
-          `[mcp-modelica] HTTP server listening on http://${info.hostname}:${info.port}`,
-        );
-      },
-    });
-  } else {
-    await server.start();
-  }
+  await server.startHttp({
+    port: cli.port,
+    hostname: cli.hostname,
+    cors: true,
+    onListen: (info) => {
+      console.error(
+        `[mcp-modelica] HTTP server listening on http://${info.hostname}:${info.port}`,
+      );
+    },
+  });
   console.error(`[mcp-modelica] Server ready (${toolsClient.count} tools).`);
 }
 
 interface CliOptions {
-  http: boolean;
   port: number;
   hostname: string;
 }
 
 function parseCli(args: readonly string[]): CliOptions {
-  let http = false;
-  let transportWasExplicit = false;
   let port = DEFAULT_HTTP_PORT;
   let hostname = "127.0.0.1";
   for (let index = 0; index < args.length; index++) {
     const argument = args[index];
-    if (argument === "--http") {
-      if (transportWasExplicit && !http) {
-        throw new TypeError("Choose either --http or --stdio, not both.");
-      }
-      http = true;
-      transportWasExplicit = true;
-    } else if (argument === "--stdio") {
-      if (transportWasExplicit && http) {
-        throw new TypeError("Choose either --http or --stdio, not both.");
-      }
-      http = false;
-      transportWasExplicit = true;
-    } else if (argument.startsWith("--port=")) {
+    if (argument.startsWith("--port=")) {
       port = positivePort(argument.slice("--port=".length));
     } else if (argument === "--port") {
       port = positivePort(args[++index]);
@@ -89,7 +161,7 @@ function parseCli(args: readonly string[]): CliOptions {
       throw new TypeError(`Unknown argument '${argument}'.`);
     }
   }
-  return { http, port, hostname };
+  return { port, hostname };
 }
 
 function positivePort(value: string | undefined): number {

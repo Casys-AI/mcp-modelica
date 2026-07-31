@@ -1,7 +1,7 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@casys/mcp-server@0.22": "0.22.0",
+    "jsr:@casys/mcp-server@0.24.1": "0.24.1",
     "jsr:@std/assert@^1.0.14": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/internal@^1.0.14": "1.0.14",
@@ -12,11 +12,11 @@
     "npm:@opentelemetry/api@^1.9.0": "1.9.1",
     "npm:ajv@^8.17.1": "8.20.0",
     "npm:hono@4": "4.12.32",
-    "npm:jose@6": "6.2.4"
+    "npm:jose@6": "6.2.5"
   },
   "jsr": {
-    "@casys/mcp-server@0.22.0": {
-      "integrity": "a8ea27bfa59509fc94218eb5c47cf383466841d03a7b43b9d880029b2d1fe03f",
+    "@casys/mcp-server@0.24.1": {
+      "integrity": "5163093e08b0b0e9fba8fce0688af725a24b0ba4b352bb1b2085ec375a086ece",
       "dependencies": [
         "jsr:@std/yaml",
         "npm:@modelcontextprotocol/ext-apps",
@@ -360,8 +360,8 @@
     "isexe@2.0.0": {
       "integrity": "sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw=="
     },
-    "jose@6.2.4": {
-      "integrity": "sha512-N8acGzVsQy6M/fjFcxtysNc4Q379TcM5dM/qKkNtsHFji88yANnXTr7BLeP75iPnFwBfQzM/jg2BZ9+HZrHCZA=="
+    "jose@6.2.5": {
+      "integrity": "sha512-2E5L2yRp03FnwreJLJX8/r7mHiZICCf8kG7fAsTWkSQTDAcc46NIZoQLKy+EJ8sPoJlxyS4OQR5H70LjIZZlIQ=="
     },
     "json-schema-traverse@1.0.0": {
       "integrity": "sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug=="
@@ -580,7 +580,7 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@casys/mcp-server@0.22",
+      "jsr:@casys/mcp-server@0.24.1",
       "jsr:@std/assert@^1.0.14",
       "jsr:@std/path@^1.1.0"
     ]
