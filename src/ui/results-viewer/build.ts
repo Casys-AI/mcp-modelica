@@ -11,6 +11,14 @@ try {
   await Deno.writeTextFile(
     importMap,
     JSON.stringify({
+      // Deno 2.9 quarantines packages published less than 24 hours ago by
+      // default. mcp-view 0.4.0 is an exact, locally audited Casys release;
+      // exempt only that package while retaining the guard for transitive
+      // dependencies.
+      minimumDependencyAge: {
+        age: "P1D",
+        exclude: ["jsr:@casys/mcp-view"],
+      },
       imports: {
         "@casys/mcp-view": mcpViewModule,
         "@modelcontextprotocol/ext-apps": "npm:@modelcontextprotocol/ext-apps@^1.7.4",
@@ -22,12 +30,11 @@ try {
   const command = new Deno.Command(Deno.execPath(), {
     args: [
       "bundle",
-      "--no-config",
+      "--config",
+      importMap,
       "--check",
       "--platform=browser",
       "--minify",
-      "--import-map",
-      importMap,
       join(here, "src", "main.ts"),
       "--output",
       bundlePath,
