@@ -83,15 +83,15 @@ deno task test
 ### Results viewer build
 
 The checked-in viewer is a single HTML resource at `src/ui/dist/results-viewer/index.html`. Build it
-against the published, exact `@casys/mcp-view@0.4.0` release:
+against the published, exact `@casys/mcp-view@0.4.1` release:
 
 ```bash
 deno task build:ui
 ```
 
 The build's temporary Deno configuration keeps the default dependency-age quarantine for all
-dependencies except the exact Casys-owned `jsr:@casys/mcp-view@0.4.0` package. The generated viewer
-contains no module path or network dependency.
+dependencies except the Casys-owned package name `jsr:@casys/mcp-view`; the import remains pinned to
+`0.4.1`. The generated viewer contains no module path or network dependency.
 
 The unit suite uses a deterministic fake runner only to test the MCP contract, validation, artifact
 hashing and failure semantics. It never claims that a physical simulation ran. A real OpenModelica

@@ -2,7 +2,7 @@
 import { dirname, fromFileUrl, join } from "jsr:@std/path@^1.1.0";
 
 const here = dirname(fromFileUrl(import.meta.url));
-const mcpViewModule = Deno.env.get("MCP_VIEW_MODULE") ?? "jsr:@casys/mcp-view@0.4.0";
+const mcpViewModule = Deno.env.get("MCP_VIEW_MODULE") ?? "jsr:@casys/mcp-view@0.4.1";
 const temporaryDirectory = await Deno.makeTempDir({ prefix: "mcp-modelica-view-build-" });
 const importMap = join(temporaryDirectory, "import-map.json");
 const bundlePath = join(temporaryDirectory, "results-viewer.js");
@@ -12,7 +12,7 @@ try {
     importMap,
     JSON.stringify({
       // Deno 2.9 quarantines packages published less than 24 hours ago by
-      // default. mcp-view 0.4.0 is an exact, locally audited Casys release;
+      // default. mcp-view 0.4.1 is an exact, locally audited Casys release;
       // exempt only that package while retaining the guard for transitive
       // dependencies.
       minimumDependencyAge: {
