@@ -59,7 +59,7 @@ export async function createModelicaServer(
 export function registerResultsViewer(
   server: McpApp,
   fileSystem: ResultsViewerFileSystem = defaultViewerFileSystem,
-  moduleUrl = import.meta.url,
+  moduleUrl: string = import.meta.url,
 ): RegisterViewersSummary {
   return server.registerViewers({
     prefix: "mcp-modelica",
