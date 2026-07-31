@@ -56,8 +56,11 @@ try {
 const template = await Deno.readTextFile(join(here, "index.html"));
 const css = await Deno.readTextFile(join(here, "src", "styles.css"));
 const html = template
-  .replace("/* STYLES_PLACEHOLDER */", css)
-  .replace("/* BUNDLE_PLACEHOLDER */", js)
+  // Replacement strings interpret `$&`, `$'`, and `$`` specially. Browser
+  // bundles routinely contain these sequences, so use callbacks to insert the
+  // generated assets byte-for-byte.
+  .replace("/* STYLES_PLACEHOLDER */", () => css)
+  .replace("/* BUNDLE_PLACEHOLDER */", () => js)
   .replace(/[ \t]+$/gm, "");
 const output = join(here, "..", "dist", "results-viewer", "index.html");
 await Deno.mkdir(dirname(output), { recursive: true });
