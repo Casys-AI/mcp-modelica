@@ -7,5 +7,11 @@ export interface ModelicaTool {
   description: string;
   category: ModelicaToolCategory;
   inputSchema: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
+  _meta?: {
+    ui: {
+      resourceUri: string;
+    };
+  };
   handler: ModelicaToolHandler;
 }

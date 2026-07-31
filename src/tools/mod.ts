@@ -1,4 +1,5 @@
 import type { ModelicaService } from "../domain/service.ts";
+import { MODELICA_RESULTS_VIEWER_URI, runListOutputSchema, runOutputSchema } from "./results.ts";
 import type { ModelicaTool } from "./types.ts";
 
 export function createModelicaTools(service: ModelicaService): ModelicaTool[] {
@@ -23,6 +24,8 @@ export function createModelicaTools(service: ModelicaService): ModelicaTool[] {
         "Returns computed observations and hashed artifacts; it never returns requirement pass/fail. " +
         "Pass/fail remains the responsibility of mcp-syson and @casys/constraint-solver.",
       category: "simulation",
+      outputSchema: runOutputSchema,
+      _meta: { ui: { resourceUri: MODELICA_RESULTS_VIEWER_URI } },
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -54,6 +57,8 @@ export function createModelicaTools(service: ModelicaService): ModelicaTool[] {
         "Use modelica_run_get for the metrics and artifact ledger. This is read-only: it does not " +
         "rerun, alter, or delete simulation evidence.",
       category: "simulation",
+      outputSchema: runListOutputSchema,
+      _meta: { ui: { resourceUri: MODELICA_RESULTS_VIEWER_URI } },
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -69,6 +74,8 @@ export function createModelicaTools(service: ModelicaService): ModelicaTool[] {
         "Read the immutable record, metrics and artifact hashes for a run returned by modelica_simulate. " +
         "This does not rerun or delete anything.",
       category: "simulation",
+      outputSchema: runOutputSchema,
+      _meta: { ui: { resourceUri: MODELICA_RESULTS_VIEWER_URI } },
       inputSchema: {
         type: "object",
         additionalProperties: false,
