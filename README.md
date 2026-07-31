@@ -77,6 +77,21 @@ deno task lint
 deno task test
 ```
 
+### Results viewer build
+
+The checked-in viewer is a single HTML resource at `src/ui/dist/results-viewer/index.html`. Until
+`@casys/mcp-view@0.4.0` is published, build it against the local scaffold checkout with an explicit,
+machine-local module URL:
+
+```bash
+MCP_VIEW_MODULE=file:///absolute/path/to/packages/view/mod.ts deno task build:ui
+```
+
+The application source imports the stable `@casys/mcp-view` specifier; the development-only build
+map supplies that local module. Until the release is published, use `MCP_VIEW_MODULE`; the
+checked-in prebuilt viewer remains usable. After publication, remove `MCP_VIEW_MODULE` and rebuild.
+The generated viewer contains no module path or network dependency.
+
 The unit suite uses a deterministic fake runner only to test the MCP contract, validation, artifact
 hashing and failure semantics. It never claims that a physical simulation ran. A real OpenModelica
 regression test is deliberately separate and requires a pinned OMC/MSL environment:
