@@ -34,7 +34,17 @@ const artifactSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    kind: { type: "string" },
+    kind: {
+      enum: [
+        "request",
+        "resolved_parameters",
+        "model",
+        "script",
+        "diagnostics",
+        "result",
+        "evidence",
+      ],
+    },
     uri: { type: "string" },
     sha256: { type: "string" },
     bytes: { type: "integer", minimum: 0 },

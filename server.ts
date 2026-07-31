@@ -14,6 +14,7 @@ export interface CreateModelicaServerOptions {
   service?: ModelicaService;
   logger?: (message: string) => void;
   viewerFileSystem?: ResultsViewerFileSystem;
+  viewerModuleUrl?: string;
 }
 
 export interface ResultsViewerFileSystem {
@@ -42,7 +43,11 @@ export async function createModelicaServer(
     logger: options.logger ?? ((message) => console.error(`[mcp-modelica] ${message}`)),
   });
   server.registerTools(toolsClient.toMCPFormat(), toolsClient.buildHandlersMap());
-  const viewerRegistration = registerResultsViewer(server, options.viewerFileSystem);
+  const viewerRegistration = registerResultsViewer(
+    server,
+    options.viewerFileSystem,
+    options.viewerModuleUrl,
+  );
   return { server, toolsClient, viewerRegistration };
 }
 
@@ -54,38 +59,69 @@ export async function createModelicaServer(
 export function registerResultsViewer(
   server: McpApp,
   fileSystem: ResultsViewerFileSystem = defaultViewerFileSystem,
+  moduleUrl = import.meta.url,
 ): RegisterViewersSummary {
   return server.registerViewers({
     prefix: "mcp-modelica",
     viewers: ["results-viewer"],
-    moduleUrl: import.meta.url,
+    moduleUrl,
     exists: fileSystem.exists,
     readFile: fileSystem.readFile,
     humanName: () => "Modelica Results Viewer",
   });
 }
 
-const defaultViewerFileSystem: ResultsViewerFileSystem = {
-  exists(path) {
-    try {
-      return Deno.statSync(path).isFile;
-    } catch (error) {
-      // The optional npm-style `ui-dist` path may sit outside the process's
-      // narrow source read permission. It is indistinguishable from an absent
-      // viewer for registration purposes and must not prevent text MCP tools
-      // from starting.
-      if (
-        error instanceof Deno.errors.NotFound ||
-        error instanceof Deno.errors.PermissionDenied ||
-        (error instanceof Error && error.name === "NotCapable")
-      ) {
-        return false;
+export function createResultsViewerFileSystem(
+  fetchViewer: (url: string) => Promise<Response> = (url) => fetch(url),
+): ResultsViewerFileSystem {
+  return {
+    exists(path) {
+      if (isRemoteViewerUrl(path)) return true;
+      try {
+        return Deno.statSync(path).isFile;
+      } catch (error) {
+        // The optional npm-style `ui-dist` path may sit outside the process's
+        // narrow source read permission. It is indistinguishable from an absent
+        // viewer for registration purposes and must not prevent text MCP tools
+        // from starting.
+        if (
+          error instanceof Deno.errors.NotFound ||
+          error instanceof Deno.errors.PermissionDenied ||
+          (error instanceof Error && error.name === "NotCapable")
+        ) {
+          return false;
+        }
+        throw error;
       }
-      throw error;
-    }
-  },
-  readFile: (path) => Deno.readTextFile(path),
-};
+    },
+    async readFile(path) {
+      if (!isRemoteViewerUrl(path)) return await Deno.readTextFile(path);
+      let response: Response;
+      try {
+        response = await fetchViewer(path);
+      } catch (error) {
+        throw new Error(`Unable to fetch Modelica results viewer from ${path}.`, { cause: error });
+      }
+      if (!response.ok) {
+        throw new Error(
+          `Unable to fetch Modelica results viewer from ${path}: HTTP ${response.status} ${response.statusText}.`,
+        );
+      }
+      return await response.text();
+    },
+  };
+}
+
+const defaultViewerFileSystem = createResultsViewerFileSystem();
+
+function isRemoteViewerUrl(path: string): boolean {
+  try {
+    const protocol = new URL(path).protocol;
+    return protocol === "https:" || protocol === "http:";
+  } catch {
+    return false;
+  }
+}
 
 if (import.meta.main) {
   const cli = parseCli(Deno.args);

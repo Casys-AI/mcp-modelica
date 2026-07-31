@@ -1,5 +1,5 @@
-import { assertEquals } from "@std/assert";
-import { createModelicaServer } from "../server.ts";
+import { assertEquals, assertRejects } from "@std/assert";
+import { createModelicaServer, createResultsViewerFileSystem } from "../server.ts";
 import { createModelicaService } from "../src/domain/service.ts";
 import { FakeRunner } from "./test-helpers.ts";
 
@@ -56,6 +56,54 @@ Deno.test("MCP App resource registration serves the built results viewer fixture
   } finally {
     await Deno.remove(directory, { recursive: true });
   }
+});
+
+Deno.test("MCP App viewer resolves the exact published JSR dist URL", async () => {
+  const directory = await Deno.makeTempDir({ prefix: "mcp-modelica-server-" });
+  const moduleUrl = "https://jsr.io/@casys/mcp-modelica/0.1.5/server.ts";
+  const expectedViewerUrl =
+    "https://jsr.io/@casys/mcp-modelica/0.1.5/src/ui/dist/results-viewer/index.html";
+  try {
+    const service = await createModelicaService({
+      runsDirectory: directory,
+      runner: new FakeRunner(),
+    });
+    const { server, viewerRegistration } = await createModelicaServer({
+      service,
+      logger: () => {},
+      viewerModuleUrl: moduleUrl,
+      viewerFileSystem: {
+        exists: (path) => path === expectedViewerUrl,
+        readFile: (path) => {
+          assertEquals(path, expectedViewerUrl);
+          return "<!doctype html><title>Remote Modelica results</title>";
+        },
+      },
+    });
+
+    assertEquals(viewerRegistration, { registered: ["results-viewer"], skipped: [] });
+    assertEquals(
+      (await server.readResourceContent("ui://mcp-modelica/results-viewer"))?.text,
+      "<!doctype html><title>Remote Modelica results</title>",
+    );
+  } finally {
+    await Deno.remove(directory, { recursive: true });
+  }
+});
+
+Deno.test("remote viewer files are accepted then fetched with an actionable failure", async () => {
+  const viewerUrl = "https://example.test/mcp-modelica/results-viewer/index.html";
+  const fileSystem = createResultsViewerFileSystem((url) => {
+    assertEquals(url, viewerUrl);
+    return Promise.resolve(new Response("not published", { status: 404, statusText: "Not Found" }));
+  });
+
+  assertEquals(fileSystem.exists(viewerUrl), true);
+  await assertRejects(
+    () => Promise.resolve(fileSystem.readFile(viewerUrl)),
+    Error,
+    "Unable to fetch Modelica results viewer",
+  );
 });
 
 Deno.test("HTTP MCP wire exposes result viewer metadata and structured simulation evidence", async () => {
