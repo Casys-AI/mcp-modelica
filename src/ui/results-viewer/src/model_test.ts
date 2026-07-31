@@ -53,4 +53,14 @@ Deno.test("results viewer renders real measurements and evidence safely", () => 
     errorMessage({ content: [{ type: "text", text: "Runner unavailable" }] }),
     "Runner unavailable",
   );
+
+  const hostile = structuredClone(run);
+  hostile.model.id = `<img src=x onerror="alert(1)">`;
+  hostile.artifacts[0].uri = `"><script>alert(1)</script>`;
+  hostile.warnings = [`<svg onload="alert(1)">`];
+  const escaped = renderRunPanels(hostile);
+  assertEquals(escaped.includes("<script>"), false);
+  assertEquals(escaped.includes("<img"), false);
+  assertEquals(escaped.includes("<svg"), false);
+  assertEquals(escaped.includes("&lt;script&gt;"), true);
 });

@@ -135,10 +135,12 @@ async function boot(): Promise<void> {
     initialView: "status",
     initialState: { display: { kind: "loading" } },
     async onToolInput(_input, app) {
+      root.setAttribute("aria-busy", "true");
       app.ctx.state.display = { kind: "loading" };
       await app.navigate("status");
     },
     async onToolResult(result, app) {
+      root.setAttribute("aria-busy", "false");
       if (result.isError) {
         app.ctx.state.display = { kind: "error", message: errorMessage(result) };
         await app.navigate("status");
@@ -193,6 +195,7 @@ function emptyState(message: string): string {
 boot().catch((error) => {
   const root = document.getElementById("root");
   if (root) {
+    root.setAttribute("aria-busy", "false");
     root.innerHTML =
       `<section class="instrument"><div class="state error" role="alert"><h1>Viewer unavailable</h1><p>${
         escapeHtml(error instanceof Error ? error.message : "The results viewer could not start.")

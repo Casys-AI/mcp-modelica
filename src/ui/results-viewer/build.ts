@@ -6,41 +6,45 @@ const mcpViewModule = Deno.env.get("MCP_VIEW_MODULE") ?? "jsr:@casys/mcp-view@0.
 const temporaryDirectory = await Deno.makeTempDir({ prefix: "mcp-modelica-view-build-" });
 const importMap = join(temporaryDirectory, "import-map.json");
 const bundlePath = join(temporaryDirectory, "results-viewer.js");
-await Deno.writeTextFile(
-  importMap,
-  JSON.stringify({
-    imports: {
-      "@casys/mcp-view": mcpViewModule,
-      "@modelcontextprotocol/ext-apps": "npm:@modelcontextprotocol/ext-apps@^1.7.4",
-      "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.29.0",
-      "@modelcontextprotocol/sdk/types.js": "npm:@modelcontextprotocol/sdk@^1.29.0/types.js",
-    },
-  }),
-);
-const command = new Deno.Command(Deno.execPath(), {
-  args: [
-    "bundle",
-    "--no-config",
-    "--check",
-    "--platform=browser",
-    "--minify",
-    "--import-map",
+let js: string;
+try {
+  await Deno.writeTextFile(
     importMap,
-    join(here, "src", "main.ts"),
-    "--output",
-    bundlePath,
-  ],
-  stdout: "piped",
-  stderr: "piped",
-});
-const result = await command.output();
-if (!result.success) {
-  throw new Error(
-    `Modelica results viewer build failed:\n${new TextDecoder().decode(result.stderr)}`,
+    JSON.stringify({
+      imports: {
+        "@casys/mcp-view": mcpViewModule,
+        "@modelcontextprotocol/ext-apps": "npm:@modelcontextprotocol/ext-apps@^1.7.4",
+        "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.29.0",
+        "@modelcontextprotocol/sdk/types.js": "npm:@modelcontextprotocol/sdk@^1.29.0/types.js",
+      },
+    }),
   );
+  const command = new Deno.Command(Deno.execPath(), {
+    args: [
+      "bundle",
+      "--no-config",
+      "--check",
+      "--platform=browser",
+      "--minify",
+      "--import-map",
+      importMap,
+      join(here, "src", "main.ts"),
+      "--output",
+      bundlePath,
+    ],
+    stdout: "piped",
+    stderr: "piped",
+  });
+  const result = await command.output();
+  if (!result.success) {
+    throw new Error(
+      `Modelica results viewer build failed:\n${new TextDecoder().decode(result.stderr)}`,
+    );
+  }
+  js = await Deno.readTextFile(bundlePath);
+} finally {
+  await Deno.remove(temporaryDirectory, { recursive: true });
 }
-const js = await Deno.readTextFile(bundlePath);
-await Deno.remove(temporaryDirectory, { recursive: true });
 
 const template = await Deno.readTextFile(join(here, "index.html"));
 const css = await Deno.readTextFile(join(here, "src", "styles.css"));
