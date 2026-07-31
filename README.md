@@ -56,10 +56,10 @@ persisted data as `structuredContent`:
   get;
 - `{ "schemaVersion": "1.0", "kind": "run-list", "runs": <ModelicaRunSummary[]> }` for list.
 
-The server only registers that resource when `src/ui/dist/results-viewer/index.html` has been built.
-Until a viewer build is added, registration is intentionally reported as skipped: text and
-structured tool results continue to work for every MCP client. Neither form contains a requirement
-verdict; Modelica reports simulation execution and computed evidence only.
+The published package includes the built, self-contained
+`src/ui/dist/results-viewer/index.html`. A source checkout with that artifact deliberately removed
+reports the viewer as skipped while keeping text and structured tool results usable. Neither form
+contains a requirement verdict; Modelica reports simulation execution and computed evidence only.
 
 Run storage is deliberately bounded: at most 20 retained runs and 5 MiB per CSV result. The server
 refuses a new run when evidence storage is full; it never silently deletes prior proof or lets an
@@ -69,6 +69,9 @@ timestamps. Use `modelica_run_get` for the metric and artifact detail. Older rec
 timestamps remain readable.
 
 ## Development
+
+Version 0.2.0 is HTTP stateless-only. It intentionally removes the former stdio/session transport
+surface instead of carrying a compatibility mode.
 
 ```bash
 deno task check
@@ -107,5 +110,5 @@ Modelica Standard Library 4.1.0 archive by commit and SHA-256. It exposes HTTP M
 has no Docker socket, no shared CAD-export volume, and no runtime library download. Release
 deployments use a published GHCR image digest, never a mutable Docker tag.
 
-Build and publish the image only after `deno task test:omc` passes. Until then, this package is
-intentionally not added to the Casys fleet or Compose stack.
+Build the image locally and accept it only after `deno task test:omc` passes. The Casys fleet and
+Compose stack pin the resulting image by digest rather than rebuilding it during dashboard startup.

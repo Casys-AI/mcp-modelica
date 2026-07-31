@@ -35,7 +35,7 @@ export async function createModelicaServer(
   const toolsClient = new ModelicaToolsClient(service);
   const server = new McpApp({
     name: "mcp-modelica",
-    version: "0.1.5",
+    version: "0.2.0",
     maxConcurrent: 1,
     backpressureStrategy: "queue",
     transport: "stateless",

@@ -26,7 +26,7 @@ COPY deno.json deno.lock mod.ts server.ts ./
 COPY src ./src
 COPY models ./models
 COPY scenarios ./scenarios
-RUN deno cache --frozen --minimum-dependency-age=0 server.ts
+RUN deno cache --frozen server.ts
 
 # OMC deliberately reads OPENMODELICALIBRARY rather than MODELICAPATH.
 # This directory contains only the MSL 4.1.0 source pinned above.
