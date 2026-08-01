@@ -70,6 +70,12 @@ simply the default surface that assembles the complete catalog. A compatible `@c
 host may request a different explicit subset and safe stack/row/grid layout without inspecting the
 iframe DOM.
 
+Every Modelica component now maps its domain data into the shared Preact presentation kit from
+`@casys/mcp-view/preact`: `Card`, `Badge`, `MetricGrid`, `KeyValueList`, `DataTable`, `EmptyState`,
+and `StateMessage`. Modelica owns the evidence semantics and small artifact-specific layout; it does
+not maintain a parallel card, metric, table, or state design system. When Compose selects a surface,
+the App mounts only those cards and omits its standalone masthead.
+
 No component claims a temperature curve: the current structured result contains scalar metrics and a
 hashed CSV artifact reference, but not the samples needed to render a truthful series inside the
 sandboxed App. A failed or timed-out run likewise never invents a temperature value.
@@ -97,21 +103,23 @@ deno task test
 
 The checked-in viewers are self-contained HTML resources at
 `src/ui/dist/{results-viewer,run-list-viewer}/index.html`. Build them against the published, exact
-`@casys/mcp-view@0.5.0` release:
+`@casys/mcp-view@0.7.0` release:
 
 ```bash
 deno task build:ui
 ```
 
 The build's temporary Deno configuration keeps the default dependency-age quarantine for all
-dependencies except the Casys-owned package name `jsr:@casys/mcp-view`; the import remains pinned to
-`0.5.0`. The generated viewer contains no module path or network dependency.
+dependencies except the Casys-owned package name `jsr:@casys/mcp-view`; the imports remain pinned to
+`0.7.0`. The generated viewer contains no module path or network dependency.
 
 To validate unreleased local `mcp-view` work without publishing it, use the existing module override
 and still rebuild the checked-in artifact:
 
 ```bash
-MCP_VIEW_MODULE=file:///absolute/path/to/mcp-server/packages/view/mod.ts deno task build:ui
+MCP_VIEW_MODULE=file:///absolute/path/to/mcp-server/packages/view/mod.ts \
+MCP_VIEW_PREACT_MODULE=file:///absolute/path/to/mcp-server/packages/view/preact.ts \
+deno task build:ui
 ```
 
 The unit suite uses a deterministic fake runner only to test the MCP contract, validation, artifact

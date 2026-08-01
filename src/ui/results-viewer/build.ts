@@ -2,7 +2,9 @@
 import { dirname, fromFileUrl, join } from "jsr:@std/path@^1.1.0";
 
 const here = dirname(fromFileUrl(import.meta.url));
-const mcpViewModule = Deno.env.get("MCP_VIEW_MODULE") ?? "jsr:@casys/mcp-view@0.5.0";
+const mcpViewModule = Deno.env.get("MCP_VIEW_MODULE") ?? "jsr:@casys/mcp-view@0.7.0";
+const mcpViewPreactModule = Deno.env.get("MCP_VIEW_PREACT_MODULE") ??
+  "jsr:@casys/mcp-view@0.7.0/preact";
 const temporaryDirectory = await Deno.makeTempDir({ prefix: "mcp-modelica-view-build-" });
 const importMap = join(temporaryDirectory, "import-map.json");
 const builds = [
@@ -15,7 +17,7 @@ try {
     importMap,
     JSON.stringify({
       // Deno 2.9 quarantines packages published less than 24 hours ago by
-      // default. mcp-view 0.5.0 is an exact, locally audited Casys release;
+      // default. mcp-view 0.7.0 is an exact, locally audited Casys release;
       // exempt only that package while retaining the guard for transitive
       // dependencies.
       minimumDependencyAge: {
@@ -24,6 +26,8 @@ try {
       },
       imports: {
         "@casys/mcp-view": mcpViewModule,
+        "@casys/mcp-view/preact": mcpViewPreactModule,
+        "preact": "npm:preact@^10.29.7",
         "@modelcontextprotocol/ext-apps": "npm:@modelcontextprotocol/ext-apps@^1.7.4",
         "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.29.0",
         "@modelcontextprotocol/sdk/types.js": "npm:@modelcontextprotocol/sdk@^1.29.0/types.js",

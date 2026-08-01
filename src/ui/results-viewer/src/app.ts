@@ -4,7 +4,9 @@ import {
   advertisedComponentCatalog,
   createMcpApp,
   defineView,
+  installMcpViewTheme,
   mountComponentSurface,
+  readSurfaceContext,
 } from "@casys/mcp-view";
 import type {
   AppContext,
@@ -12,7 +14,7 @@ import type {
   MountedComponentSurface,
   ViewComponentRegistry,
 } from "@casys/mcp-view";
-import { createRunComponentRegistry, createRunListComponentRegistry } from "./components.ts";
+import { createRunComponentRegistry, createRunListComponentRegistry } from "./components.tsx";
 import {
   type DisplayState,
   errorMessage,
@@ -46,7 +48,7 @@ const statusView = defineView<ResultsViewerState>({
     if (display.kind === "loading") {
       return shell(
         "Simulation evidence",
-        `<div class="state loading"><span class="spinner" aria-hidden="true"></span><p>Receiving Modelica simulation evidence…</p></div>`,
+        `<div class="mcp-view-state" data-tone="info"><span class="spinner" aria-hidden="true"></span><strong>Receiving Modelica simulation evidence…</strong></div>`,
       );
     }
     if (display.kind === "empty") {
@@ -58,9 +60,9 @@ const statusView = defineView<ResultsViewerState>({
     if (display.kind === "error") {
       return shell(
         "Simulation evidence",
-        `<div class="state error" role="alert"><h2>Unable to display this result</h2><p>${
+        `<div class="mcp-view-state" data-tone="danger" role="alert"><strong>Unable to display this result</strong><div class="mcp-view-state-detail">${
           escapeHtml(display.message)
-        }</p></div>`,
+        }</div></div>`,
       );
     }
     return shell(
@@ -90,7 +92,10 @@ function createListView(
           emptyState("No persisted simulation runs were returned."),
         );
       }
-      const { node, target } = componentShell("Persisted simulation runs");
+      const { node, target } = componentShell(
+        "Persisted simulation runs",
+        hasRequestedSurface(ctx),
+      );
       scheduleSurfaceMount(target, registry, runs, ctx);
       return node;
     },
@@ -131,15 +136,18 @@ function createDetailView(
       if ("error" in data) {
         return shell(
           "Simulation evidence",
-          `<div class="state error" role="alert"><h2>Unable to load run detail</h2><p>${
+          `<div class="mcp-view-state" data-tone="danger" role="alert"><strong>Unable to load run detail</strong><div class="mcp-view-state-detail">${
             escapeHtml(data.error)
-          }</p></div>`,
+          }</div></div>`,
         );
       }
-      const { node, target, masthead } = componentShell("Simulation evidence");
+      const { node, target, masthead } = componentShell(
+        "Simulation evidence",
+        hasRequestedSurface(ctx),
+      );
       if (ctx.state.display.kind === "run-list") {
         const back = document.createElement("button");
-        back.className = "back";
+        back.className = "mcp-view-button";
         back.type = "button";
         back.textContent = "All runs";
         back.addEventListener("click", () => {
@@ -147,6 +155,7 @@ function createDetailView(
           if (display.kind === "run-list") void ctx.navigate("list", display);
         });
         masthead.prepend(back);
+        if (masthead.parentElement === null) node.prepend(masthead);
       }
       scheduleSurfaceMount(
         target,
@@ -163,6 +172,7 @@ function createDetailView(
 export async function bootResultsViewer(options: ResultsViewerOptions): Promise<void> {
   const root = document.getElementById("root");
   if (!root) throw new Error("The results viewer root is missing.");
+  installMcpViewTheme();
   const runRegistry = createRunComponentRegistry();
   const listRegistry = createRunListComponentRegistry();
   const componentCatalog = options.resource === "run"
@@ -171,7 +181,8 @@ export async function bootResultsViewer(options: ResultsViewerOptions): Promise<
   const listView = createListView(listRegistry);
   const detailView = createDetailView(runRegistry);
 
-  await createMcpApp<ResultsViewerState>({
+  let removeHostContextListener = () => {};
+  const app = await createMcpApp<ResultsViewerState>({
     info: { name: "Modelica Results Viewer", version: "1.0.0" },
     root,
     views: { status: statusView, list: listView, detail: detailView },
@@ -207,9 +218,23 @@ export async function bootResultsViewer(options: ResultsViewerOptions): Promise<
       }
     },
     async onTeardown() {
+      removeHostContextListener();
       await disposeMountedSurface();
     },
   });
+  const remountSelectedSurface = () => {
+    const display = app.ctx.state.display;
+    const navigation = display.kind === "run-list"
+      ? app.navigate("list", display)
+      : display.kind === "run"
+      ? app.navigate("detail", display)
+      : undefined;
+    navigation?.catch((error) => console.error("Unable to remount the Modelica surface", error));
+  };
+  app.ctx.app.addEventListener("hostcontextchanged", remountSelectedSurface);
+  removeHostContextListener = () => {
+    app.ctx.app.removeEventListener("hostcontextchanged", remountSelectedSurface);
+  };
 }
 
 export function startResultsViewer(options: ResultsViewerOptions): void {
@@ -218,31 +243,42 @@ export function startResultsViewer(options: ResultsViewerOptions): void {
     if (root) {
       root.setAttribute("aria-busy", "false");
       root.innerHTML =
-        `<section class="instrument"><div class="state error" role="alert"><h1>Viewer unavailable</h1><p>${
+        `<section class="mcp-view-card modelica-shell"><div class="mcp-view-state" data-tone="danger" role="alert"><strong>Viewer unavailable</strong><div class="mcp-view-state-detail">${
           escapeHtml(error instanceof Error ? error.message : "The results viewer could not start.")
-        }</p></div></section>`;
+        }</div></div></section>`;
     }
     console.error(error);
   });
 }
 
-function componentShell(title: string): {
+function componentShell(title: string, componentOnly: boolean): {
   node: HTMLElement;
   target: HTMLElement;
   masthead: HTMLElement;
 } {
   const node = document.createElement("section");
-  node.className = "instrument";
+  node.className = componentOnly ? "modelica-component-only" : "mcp-view-card modelica-shell";
   node.setAttribute("aria-label", "Modelica simulation results");
-  const masthead = document.createElement("header");
-  masthead.className = "masthead";
-  masthead.innerHTML = `<div><p class="kicker">MCP / MODELICA</p><h1>${
-    escapeHtml(title)
-  }</h1></div><span class="readout">EVIDENCE</span>`;
+  const masthead = document.createElement(componentOnly ? "div" : "header");
+  masthead.className = componentOnly
+    ? "mcp-view-toolbar modelica-component-actions"
+    : "mcp-view-card-header";
+  if (!componentOnly) {
+    masthead.innerHTML =
+      `<div class="mcp-view-card-heading"><p class="mcp-view-card-eyebrow">MCP / MODELICA</p><h2 class="mcp-view-card-title">${
+        escapeHtml(title)
+      }</h2></div><div class="mcp-view-card-actions"><span class="mcp-view-badge" data-tone="info">EVIDENCE</span></div>`;
+  }
   const target = document.createElement("div");
   target.className = "component-surface-host";
-  node.append(masthead, target);
+  if (componentOnly) node.append(target);
+  else node.append(masthead, target);
   return { node, target, masthead };
+}
+
+function hasRequestedSurface(ctx: ViewerContext): boolean {
+  const surface = readSurfaceContext(ctx.hostContext);
+  return surface?.status === "ready" && surface.surface !== undefined;
 }
 
 function scheduleSurfaceMount<TData>(
@@ -268,9 +304,9 @@ function scheduleSurfaceMount<TData>(
       });
     } catch (error) {
       target.innerHTML =
-        `<div class="state error" role="alert"><h2>Unable to compose components</h2><p>${
+        `<div class="mcp-view-state" data-tone="danger" role="alert"><strong>Unable to compose components</strong><div class="mcp-view-state-detail">${
           escapeHtml(error instanceof Error ? error.message : "The component surface failed.")
-        }</p></div>`;
+        }</div></div>`;
     }
   });
 }
@@ -283,9 +319,9 @@ async function disposeMountedSurface(invalidate = true): Promise<void> {
 }
 
 function shell(title: string, content: string): string {
-  return `<section class="instrument" aria-label="Modelica simulation results"><header class="masthead"><div><p class="kicker">MCP / MODELICA</p><h1>${title}</h1></div><span class="readout">EVIDENCE</span></header>${content}</section>`;
+  return `<section class="mcp-view-card modelica-shell" aria-label="Modelica simulation results"><header class="mcp-view-card-header"><div class="mcp-view-card-heading"><p class="mcp-view-card-eyebrow">MCP / MODELICA</p><h2 class="mcp-view-card-title">${title}</h2></div><div class="mcp-view-card-actions"><span class="mcp-view-badge" data-tone="info">EVIDENCE</span></div></header>${content}</section>`;
 }
 
 function emptyState(message: string): string {
-  return `<div class="state empty"><h2>No evidence to display</h2><p>${message}</p></div>`;
+  return `<div class="mcp-view-state"><strong>No evidence to display</strong><div class="mcp-view-state-detail">${message}</div></div>`;
 }
