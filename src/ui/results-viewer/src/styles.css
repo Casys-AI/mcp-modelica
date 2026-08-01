@@ -189,6 +189,41 @@ td {
   border: 1px solid var(--line);
   background: var(--panel);
 }
+.component-surface-host {
+  padding: 18px 22px;
+}
+.component-surface-host .mcp-view-component,
+.component-surface-host .panel {
+  min-width: 0;
+  margin: 0;
+}
+.run-identity-component {
+  padding: 14px 15px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.run-identity-component h2 {
+  margin: 0 0 5px;
+  overflow-wrap: anywhere;
+  font-family: var(--font-data);
+  font-size: 16px;
+}
+.run-identity-component .run-time {
+  margin-bottom: 0;
+}
+[data-primitive="status"][data-tone="success"] strong {
+  color: var(--ok);
+}
+[data-primitive="status"][data-tone="warning"] strong {
+  color: var(--warn);
+}
+[data-primitive="status"][data-tone="danger"] strong {
+  color: var(--danger);
+}
+[data-primitive="metric-grid"] strong,
+[data-primitive="key-value"] dd {
+  font-family: var(--font-data);
+}
 .panel h2 {
   display: flex;
   justify-content: space-between;
@@ -332,6 +367,9 @@ code {
   }
   .run-header .status {
     margin-left: auto;
+  }
+  .component-surface-host {
+    padding: 16px;
   }
 }
 

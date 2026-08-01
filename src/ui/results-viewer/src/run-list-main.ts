@@ -1,3 +1,3 @@
 import { startResultsViewer } from "./app.ts";
 
-startResultsViewer({ resource: "run" });
+startResultsViewer({ resource: "run-list" });

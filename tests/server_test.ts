@@ -19,8 +19,12 @@ Deno.test("MCP App resource registration is skipped until the viewer build exist
       },
     });
 
-    assertEquals(viewerRegistration, { registered: [], skipped: ["results-viewer"] });
+    assertEquals(viewerRegistration, {
+      registered: [],
+      skipped: ["results-viewer", "run-list-viewer"],
+    });
     assertEquals(server.hasResource("ui://mcp-modelica/results-viewer"), false);
+    assertEquals(server.hasResource("ui://mcp-modelica/run-list-viewer"), false);
   } finally {
     await Deno.remove(directory, { recursive: true });
   }
@@ -42,7 +46,10 @@ Deno.test("MCP App resource registration serves the built results viewer fixture
       },
     });
 
-    assertEquals(viewerRegistration, { registered: ["results-viewer"], skipped: [] });
+    assertEquals(viewerRegistration, {
+      registered: ["results-viewer"],
+      skipped: ["run-list-viewer"],
+    });
     assertEquals(server.getResourceInfo("ui://mcp-modelica/results-viewer"), {
       uri: "ui://mcp-modelica/results-viewer",
       name: "Modelica Results Viewer",
@@ -70,10 +77,20 @@ Deno.test("built Modelica results viewer is registered as the MCP App resource",
       logger: () => {},
     });
 
-    assertEquals(viewerRegistration, { registered: ["results-viewer"], skipped: [] });
-    const html = (await server.readResourceContent("ui://mcp-modelica/results-viewer"))?.text;
-    assertEquals(html?.includes("Modelica simulation results"), true);
-    assertEquals(html?.includes("@casys/mcp-view"), false);
+    assertEquals(viewerRegistration, {
+      registered: ["results-viewer", "run-list-viewer"],
+      skipped: [],
+    });
+    for (
+      const uri of [
+        "ui://mcp-modelica/results-viewer",
+        "ui://mcp-modelica/run-list-viewer",
+      ]
+    ) {
+      const html = (await server.readResourceContent(uri))?.text;
+      assertEquals(html?.includes("Modelica simulation results"), true);
+      assertEquals(html?.includes("@casys/mcp-view"), false);
+    }
   } finally {
     await Deno.remove(directory, { recursive: true });
   }
@@ -82,8 +99,10 @@ Deno.test("built Modelica results viewer is registered as the MCP App resource",
 Deno.test("MCP App viewer resolves the exact published JSR dist URL", async () => {
   const directory = await Deno.makeTempDir({ prefix: "mcp-modelica-server-" });
   const moduleUrl = "https://jsr.io/@casys/mcp-modelica/0.2.0/server.ts";
-  const expectedViewerUrl =
+  const expectedResultsViewerUrl =
     "https://jsr.io/@casys/mcp-modelica/0.2.0/src/ui/dist/results-viewer/index.html";
+  const expectedRunListViewerUrl =
+    "https://jsr.io/@casys/mcp-modelica/0.2.0/src/ui/dist/run-list-viewer/index.html";
   try {
     const service = await createModelicaService({
       runsDirectory: directory,
@@ -94,18 +113,28 @@ Deno.test("MCP App viewer resolves the exact published JSR dist URL", async () =
       logger: () => {},
       viewerModuleUrl: moduleUrl,
       viewerFileSystem: {
-        exists: (path) => path === expectedViewerUrl,
+        exists: (path) => path === expectedResultsViewerUrl || path === expectedRunListViewerUrl,
         readFile: (path) => {
-          assertEquals(path, expectedViewerUrl);
-          return "<!doctype html><title>Remote Modelica results</title>";
+          if (path === expectedResultsViewerUrl) {
+            return "<!doctype html><title>Remote Modelica results</title>";
+          }
+          assertEquals(path, expectedRunListViewerUrl);
+          return "<!doctype html><title>Remote Modelica run list</title>";
         },
       },
     });
 
-    assertEquals(viewerRegistration, { registered: ["results-viewer"], skipped: [] });
+    assertEquals(viewerRegistration, {
+      registered: ["results-viewer", "run-list-viewer"],
+      skipped: [],
+    });
     assertEquals(
       (await server.readResourceContent("ui://mcp-modelica/results-viewer"))?.text,
       "<!doctype html><title>Remote Modelica results</title>",
+    );
+    assertEquals(
+      (await server.readResourceContent("ui://mcp-modelica/run-list-viewer"))?.text,
+      "<!doctype html><title>Remote Modelica run list</title>",
     );
   } finally {
     await Deno.remove(directory, { recursive: true });
@@ -152,7 +181,7 @@ Deno.test("HTTP MCP wire exposes result viewer metadata and structured simulatio
         "modelica_run_list",
         "modelica_simulate",
       ]);
-      for (const name of ["modelica_simulate", "modelica_run_list", "modelica_run_get"]) {
+      for (const name of ["modelica_simulate", "modelica_run_get"]) {
         const tool = tools.find((candidate) => candidate.name === name);
         assertEquals(
           (tool?._meta as { ui?: { resourceUri?: string } } | undefined)?.ui?.resourceUri,
@@ -160,6 +189,12 @@ Deno.test("HTTP MCP wire exposes result viewer metadata and structured simulatio
         );
         assertEquals((tool?.outputSchema as { type?: string } | undefined)?.type, "object");
       }
+      const runListTool = tools.find((candidate) => candidate.name === "modelica_run_list");
+      assertEquals(
+        (runListTool?._meta as { ui?: { resourceUri?: string } } | undefined)?.ui?.resourceUri,
+        "ui://mcp-modelica/run-list-viewer",
+      );
+      assertEquals((runListTool?.outputSchema as { type?: string } | undefined)?.type, "object");
 
       const simulated = await rpc(port, "tools/call", {
         name: "modelica_simulate",

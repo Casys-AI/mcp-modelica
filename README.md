@@ -48,18 +48,31 @@ return `unresolved` or `fail` from a real rule.
 
 ## Results viewer contract
 
-`modelica_simulate`, `modelica_run_list`, and `modelica_run_get` expose the same MCP App resource
-URI: `ui://mcp-modelica/results-viewer`. They retain a concise text fallback and expose their real
-persisted data as `structuredContent`:
+`modelica_simulate` and `modelica_run_get` expose `ui://mcp-modelica/results-viewer`.
+`modelica_run_list` uses the separate `ui://mcp-modelica/run-list-viewer` resource so a discovery
+list never advertises detail-only evidence facets. Both retain a concise text fallback and expose
+their real persisted data as `structuredContent`:
 
 - `{ "schemaVersion": "1.0", "kind": "run", "run": <immutable SimulationRun> }` for simulate and
   get;
 - `{ "schemaVersion": "1.0", "kind": "run-list", "runs": <ModelicaRunSummary[]> }` for list.
 
-The published package includes the built, self-contained
-`src/ui/dist/results-viewer/index.html`. A source checkout with that artifact deliberately removed
-reports the viewer as skipped while keeping text and structured tool results usable. Neither form
-contains a requirement verdict; Modelica reports simulation execution and computed evidence only.
+The published package includes both built, self-contained HTML resources under `src/ui/dist/`. A
+source checkout with either artifact deliberately removed reports that viewer as skipped while
+keeping text and structured tool results usable. Neither form contains a requirement verdict;
+Modelica reports simulation execution and computed evidence only.
+
+The run viewer advertises small, App-owned components rather than alternate size modes:
+`modelica.run-identity`, `modelica.execution-status`, `modelica.metrics`, `modelica.parameters`,
+`modelica.provenance`, `modelica.artifacts`, and `modelica.warnings`. The run-list resource
+separately advertises `modelica.run-list-summary` and `modelica.run-table`. Its standalone viewer is
+simply the default surface that assembles the complete catalog. A compatible `@casys/mcp-compose`
+host may request a different explicit subset and safe stack/row/grid layout without inspecting the
+iframe DOM.
+
+No component claims a temperature curve: the current structured result contains scalar metrics and a
+hashed CSV artifact reference, but not the samples needed to render a truthful series inside the
+sandboxed App. A failed or timed-out run likewise never invents a temperature value.
 
 Run storage is deliberately bounded: at most 20 retained runs and 5 MiB per CSV result. The server
 refuses a new run when evidence storage is full; it never silently deletes prior proof or lets an
@@ -82,8 +95,9 @@ deno task test
 
 ### Results viewer build
 
-The checked-in viewer is a single HTML resource at `src/ui/dist/results-viewer/index.html`. Build it
-against the published, exact `@casys/mcp-view@0.4.1` release:
+The checked-in viewers are self-contained HTML resources at
+`src/ui/dist/{results-viewer,run-list-viewer}/index.html`. Build them against the published, exact
+`@casys/mcp-view@0.5.0` release:
 
 ```bash
 deno task build:ui
@@ -91,7 +105,14 @@ deno task build:ui
 
 The build's temporary Deno configuration keeps the default dependency-age quarantine for all
 dependencies except the Casys-owned package name `jsr:@casys/mcp-view`; the import remains pinned to
-`0.4.1`. The generated viewer contains no module path or network dependency.
+`0.5.0`. The generated viewer contains no module path or network dependency.
+
+To validate unreleased local `mcp-view` work without publishing it, use the existing module override
+and still rebuild the checked-in artifact:
+
+```bash
+MCP_VIEW_MODULE=file:///absolute/path/to/mcp-server/packages/view/mod.ts deno task build:ui
+```
 
 The unit suite uses a deterministic fake runner only to test the MCP contract, validation, artifact
 hashing and failure semantics. It never claims that a physical simulation ran. A real OpenModelica

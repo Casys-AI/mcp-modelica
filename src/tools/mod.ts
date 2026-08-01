@@ -1,5 +1,10 @@
 import type { ModelicaService } from "../domain/service.ts";
-import { MODELICA_RESULTS_VIEWER_URI, runListOutputSchema, runOutputSchema } from "./results.ts";
+import {
+  MODELICA_RESULTS_VIEWER_URI,
+  MODELICA_RUN_LIST_VIEWER_URI,
+  runListOutputSchema,
+  runOutputSchema,
+} from "./results.ts";
 import type { ModelicaTool } from "./types.ts";
 
 export function createModelicaTools(service: ModelicaService): ModelicaTool[] {
@@ -58,7 +63,7 @@ export function createModelicaTools(service: ModelicaService): ModelicaTool[] {
         "rerun, alter, or delete simulation evidence.",
       category: "simulation",
       outputSchema: runListOutputSchema,
-      _meta: { ui: { resourceUri: MODELICA_RESULTS_VIEWER_URI } },
+      _meta: { ui: { resourceUri: MODELICA_RUN_LIST_VIEWER_URI } },
       inputSchema: {
         type: "object",
         additionalProperties: false,

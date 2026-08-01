@@ -2,6 +2,7 @@ import type { StructuredToolResult } from "@casys/mcp-server";
 import type { ModelicaRunSummary, SimulationRun } from "../domain/types.ts";
 
 export const MODELICA_RESULTS_VIEWER_URI = "ui://mcp-modelica/results-viewer";
+export const MODELICA_RUN_LIST_VIEWER_URI = "ui://mcp-modelica/run-list-viewer";
 export const MODELICA_RESULTS_SCHEMA_VERSION = "1.0" as const;
 
 /** Stable structured content consumed by the Modelica results MCP App. */

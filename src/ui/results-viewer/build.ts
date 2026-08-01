@@ -2,17 +2,20 @@
 import { dirname, fromFileUrl, join } from "jsr:@std/path@^1.1.0";
 
 const here = dirname(fromFileUrl(import.meta.url));
-const mcpViewModule = Deno.env.get("MCP_VIEW_MODULE") ?? "jsr:@casys/mcp-view@0.4.1";
+const mcpViewModule = Deno.env.get("MCP_VIEW_MODULE") ?? "jsr:@casys/mcp-view@0.5.0";
 const temporaryDirectory = await Deno.makeTempDir({ prefix: "mcp-modelica-view-build-" });
 const importMap = join(temporaryDirectory, "import-map.json");
-const bundlePath = join(temporaryDirectory, "results-viewer.js");
-let js: string;
+const builds = [
+  { entry: "main.ts", viewer: "results-viewer" },
+  { entry: "run-list-main.ts", viewer: "run-list-viewer" },
+] as const;
+const bundles = new Map<string, string>();
 try {
   await Deno.writeTextFile(
     importMap,
     JSON.stringify({
       // Deno 2.9 quarantines packages published less than 24 hours ago by
-      // default. mcp-view 0.4.1 is an exact, locally audited Casys release;
+      // default. mcp-view 0.5.0 is an exact, locally audited Casys release;
       // exempt only that package while retaining the guard for transitive
       // dependencies.
       minimumDependencyAge: {
@@ -27,44 +30,51 @@ try {
       },
     }),
   );
-  const command = new Deno.Command(Deno.execPath(), {
-    args: [
-      "bundle",
-      "--config",
-      importMap,
-      "--check",
-      "--platform=browser",
-      "--minify",
-      join(here, "src", "main.ts"),
-      "--output",
-      bundlePath,
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  });
-  const result = await command.output();
-  if (!result.success) {
-    throw new Error(
-      `Modelica results viewer build failed:\n${new TextDecoder().decode(result.stderr)}`,
-    );
+  for (const build of builds) {
+    const bundlePath = join(temporaryDirectory, `${build.viewer}.js`);
+    const command = new Deno.Command(Deno.execPath(), {
+      args: [
+        "bundle",
+        "--config",
+        importMap,
+        "--check",
+        "--platform=browser",
+        "--minify",
+        join(here, "src", build.entry),
+        "--output",
+        bundlePath,
+      ],
+      stdout: "piped",
+      stderr: "piped",
+    });
+    const result = await command.output();
+    if (!result.success) {
+      throw new Error(
+        `Modelica ${build.viewer} build failed:\n${new TextDecoder().decode(result.stderr)}`,
+      );
+    }
+    bundles.set(build.viewer, await Deno.readTextFile(bundlePath));
   }
-  js = await Deno.readTextFile(bundlePath);
 } finally {
   await Deno.remove(temporaryDirectory, { recursive: true });
 }
 
 const template = await Deno.readTextFile(join(here, "index.html"));
 const css = await Deno.readTextFile(join(here, "src", "styles.css"));
-const html = template
-  // Replacement strings interpret `$&`, `$'`, and `$`` specially. Browser
-  // bundles routinely contain these sequences, so use callbacks to insert the
-  // generated assets byte-for-byte.
-  .replace("/* STYLES_PLACEHOLDER */", () => css)
-  .replace("/* BUNDLE_PLACEHOLDER */", () => js)
-  .replace(/[ \t]+$/gm, "");
-const output = join(here, "..", "dist", "results-viewer", "index.html");
-await Deno.mkdir(dirname(output), { recursive: true });
-await Deno.writeTextFile(output, html);
-console.log(
-  `[build:ui] wrote ${output} (${(new TextEncoder().encode(html).length / 1024).toFixed(1)} KiB)`,
-);
+for (const build of builds) {
+  const js = bundles.get(build.viewer);
+  if (js === undefined) throw new Error(`Missing generated bundle for ${build.viewer}.`);
+  const html = template
+    // Replacement strings interpret `$&`, `$'`, and `$`` specially. Browser
+    // bundles routinely contain these sequences, so use callbacks to insert the
+    // generated assets byte-for-byte.
+    .replace("/* STYLES_PLACEHOLDER */", () => css)
+    .replace("/* BUNDLE_PLACEHOLDER */", () => js)
+    .replace(/[ \t]+$/gm, "");
+  const output = join(here, "..", "dist", build.viewer, "index.html");
+  await Deno.mkdir(dirname(output), { recursive: true });
+  await Deno.writeTextFile(output, html);
+  console.log(
+    `[build:ui] wrote ${output} (${(new TextEncoder().encode(html).length / 1024).toFixed(1)} KiB)`,
+  );
+}

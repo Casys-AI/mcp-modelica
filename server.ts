@@ -53,7 +53,7 @@ export async function createModelicaServer(
 
 /**
  * Registers the build output when present. A source checkout may not have a
- * UI build yet, in which case McpApp reports `results-viewer` as skipped and
+ * UI build yet, in which case McpApp reports the absent viewers as skipped and
  * the text/structured tool results remain fully usable.
  */
 export function registerResultsViewer(
@@ -63,11 +63,12 @@ export function registerResultsViewer(
 ): RegisterViewersSummary {
   return server.registerViewers({
     prefix: "mcp-modelica",
-    viewers: ["results-viewer"],
+    viewers: ["results-viewer", "run-list-viewer"],
     moduleUrl,
     exists: fileSystem.exists,
     readFile: fileSystem.readFile,
-    humanName: () => "Modelica Results Viewer",
+    humanName: (name) =>
+      name === "run-list-viewer" ? "Modelica Run List Viewer" : "Modelica Results Viewer",
   });
 }
 

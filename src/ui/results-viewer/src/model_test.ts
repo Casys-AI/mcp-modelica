@@ -1,6 +1,6 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
 import { errorMessage, parseResultsEnvelope, type SimulationRun } from "./model.ts";
-import { escapeHtml, formatQuantity, renderRunPanels } from "./render.ts";
+import { escapeHtml, formatQuantity, formatTimestamp } from "./render.ts";
 
 const run: SimulationRun = {
   status: "succeeded",
@@ -40,27 +40,23 @@ Deno.test("results viewer parses exactly the v1 run and run-list envelopes", () 
   );
 });
 
-Deno.test("results viewer renders real measurements and evidence safely", () => {
-  const rendered = renderRunPanels(run);
+Deno.test("results viewer formatting is truthful and HTML-safe", () => {
   assertEquals(formatQuantity({ value: 1500, unit: "W" }), "1,500 W");
-  assertEquals(rendered.includes("water_temperature_max"), true);
-  assertEquals(rendered.includes("94 degC"), true);
-  assertEquals(rendered.includes("OpenModelica 1.27"), true);
-  assertEquals(rendered.includes("casys://modelica/runs/"), true);
-  assertEquals(rendered.includes("pass"), false);
-  assertEquals(escapeHtml("<unsafe>"), "&lt;unsafe&gt;");
+  assertStringIncludes(formatTimestamp(run.completed_at), "2026");
+  assertEquals(
+    escapeHtml(`<img src=x onerror="alert(1)">`),
+    "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;",
+  );
   assertEquals(
     errorMessage({ content: [{ type: "text", text: "Runner unavailable" }] }),
     "Runner unavailable",
   );
+  assertEquals(errorMessage({ content: [] }), "The Modelica tool reported an error.");
+});
 
-  const hostile = structuredClone(run);
-  hostile.model.id = `<img src=x onerror="alert(1)">`;
-  hostile.artifacts[0].uri = `"><script>alert(1)</script>`;
-  hostile.warnings = [`<svg onload="alert(1)">`];
-  const escaped = renderRunPanels(hostile);
-  assertEquals(escaped.includes("<script>"), false);
-  assertEquals(escaped.includes("<img"), false);
-  assertEquals(escaped.includes("<svg"), false);
-  assertEquals(escaped.includes("&lt;script&gt;"), true);
+Deno.test("component styles contain no projection-mode selectors", async () => {
+  const styles = await Deno.readTextFile(new URL("./styles.css", import.meta.url));
+  assertStringIncludes(styles, ".component-surface-host");
+  assertEquals(styles.includes("data-casys-projection"), false);
+  assertEquals(styles.includes("glance"), false);
 });

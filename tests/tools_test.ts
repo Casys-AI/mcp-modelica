@@ -18,11 +18,14 @@ Deno.test("MCP surface is a small closed set of four Modelica tools", async () =
       "modelica_run_list",
       "modelica_run_get",
     ]);
-    for (const name of ["modelica_simulate", "modelica_run_list", "modelica_run_get"]) {
+    for (const name of ["modelica_simulate", "modelica_run_get"]) {
       const tool = wireTools.find((candidate) => candidate.name === name);
       assertEquals(tool?._meta?.ui.resourceUri, "ui://mcp-modelica/results-viewer");
       assertEquals(tool?.outputSchema?.type, "object");
     }
+    const runListTool = wireTools.find((candidate) => candidate.name === "modelica_run_list");
+    assertEquals(runListTool?._meta?.ui.resourceUri, "ui://mcp-modelica/run-list-viewer");
+    assertEquals(runListTool?.outputSchema?.type, "object");
     assertEquals(wireTools.find((tool) => tool.name === "modelica_kit_list")?._meta, undefined);
     const handlers = client.buildHandlersMap();
     const catalog = await handlers.get("modelica_kit_list")!({});
