@@ -1,9 +1,11 @@
 import type { ModelicaService } from "../domain/service.ts";
 import {
+  kitListOutputSchema,
   MODELICA_RESULTS_VIEWER_URI,
   MODELICA_RUN_LIST_VIEWER_URI,
   runListOutputSchema,
   runOutputSchema,
+  toKitListResult,
 } from "./results.ts";
 import type { ModelicaTool } from "./types.ts";
 
@@ -15,12 +17,13 @@ export function createModelicaTools(service: ModelicaService): ModelicaTool[] {
         "List approved, versioned Modelica kits, scenarios, bounded parameter overrides and produced metrics. " +
         "Use this before modelica_simulate. This server never accepts Modelica source, scripts or file paths from callers.",
       category: "catalog",
+      outputSchema: kitListOutputSchema,
       inputSchema: {
         type: "object",
         additionalProperties: false,
         properties: {},
       },
-      handler: () => service.listKits(),
+      handler: () => toKitListResult(service.listKits()),
     },
     {
       name: "modelica_simulate",

@@ -26,10 +26,20 @@ Deno.test("MCP surface is a small closed set of four Modelica tools", async () =
     const runListTool = wireTools.find((candidate) => candidate.name === "modelica_run_list");
     assertEquals(runListTool?._meta?.ui.resourceUri, "ui://mcp-modelica/run-list-viewer");
     assertEquals(runListTool?.outputSchema?.type, "object");
-    assertEquals(wireTools.find((tool) => tool.name === "modelica_kit_list")?._meta, undefined);
+    const kitListTool = wireTools.find((tool) => tool.name === "modelica_kit_list");
+    assertEquals(kitListTool?._meta, undefined);
+    // The catalogue answers with the same envelope shape as every other tool:
+    // a conformant MCP client binds structuredContent, never parsed prose.
+    assertEquals(kitListTool?.outputSchema?.type, "object");
     const handlers = client.buildHandlersMap();
-    const catalog = await handlers.get("modelica_kit_list")!({});
-    assertEquals((catalog as Array<{ id: string }>)[0].id, "coffee-machine-v1");
+    const catalog = await handlers.get("modelica_kit_list")!({}) as {
+      content: string;
+      structuredContent: { schemaVersion: string; kind: string; kits: Array<{ id: string }> };
+    };
+    assertEquals(catalog.content, "Found 1 approved Modelica kit.");
+    assertEquals(catalog.structuredContent.schemaVersion, "1.0");
+    assertEquals(catalog.structuredContent.kind, "kit-list");
+    assertEquals(catalog.structuredContent.kits[0].id, "coffee-machine-v1");
     assertEquals(await handlers.get("modelica_run_list")!({}), {
       content: "Found 0 persisted simulation runs.",
       structuredContent: { schemaVersion: "1.0", kind: "run-list", runs: [] },

@@ -1,5 +1,5 @@
 import type { StructuredToolResult } from "@casys/mcp-server";
-import type { ModelicaRunSummary, SimulationRun } from "../domain/types.ts";
+import type { ModelicaRunSummary, PublicKit, SimulationRun } from "../domain/types.ts";
 
 export const MODELICA_RESULTS_VIEWER_URI = "ui://mcp-modelica/results-viewer";
 export const MODELICA_RUN_LIST_VIEWER_URI = "ui://mcp-modelica/run-list-viewer";
@@ -19,7 +19,25 @@ export interface ModelicaRunListResultEnvelope extends Record<string, unknown> {
   runs: ModelicaRunSummary[];
 }
 
-export type ModelicaResultsEnvelope = ModelicaRunResultEnvelope | ModelicaRunListResultEnvelope;
+/**
+ * Stable structured content for the approved kit catalogue.
+ *
+ * WHY AN ENVELOPE — every other tool of this server answers with
+ * `{schemaVersion, kind, ...}` structured content. A bare array carried only in
+ * the text content forced each caller to re-parse prose and gave conformant MCP
+ * clients nothing to bind to; the catalogue now follows the same shape as its
+ * siblings.
+ */
+export interface ModelicaKitListResultEnvelope extends Record<string, unknown> {
+  schemaVersion: typeof MODELICA_RESULTS_SCHEMA_VERSION;
+  kind: "kit-list";
+  kits: PublicKit[];
+}
+
+export type ModelicaResultsEnvelope =
+  | ModelicaRunResultEnvelope
+  | ModelicaRunListResultEnvelope
+  | ModelicaKitListResultEnvelope;
 
 const quantitySchema = {
   type: "object",
@@ -131,6 +149,85 @@ const runSummarySchema = {
   required: ["status", "run_id", "fingerprint", "model", "scenario"],
 };
 
+const publicParameterSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    id: { type: "string" },
+    description: { type: "string" },
+    unit: { type: "string" },
+    default: quantitySchema,
+    minimum: { type: "number" },
+    maximum: { type: "number" },
+  },
+  required: ["id", "description", "unit", "default", "minimum", "maximum"],
+};
+
+const publicScenarioSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    id: { type: "string" },
+    description: { type: "string" },
+    stop_time_s: { type: "number" },
+    number_of_intervals: { type: "integer" },
+    solver: { type: "string" },
+    target_temperature: quantitySchema,
+  },
+  required: [
+    "id",
+    "description",
+    "stop_time_s",
+    "number_of_intervals",
+    "solver",
+    "target_temperature",
+  ],
+};
+
+const publicKitSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    id: { type: "string" },
+    version: { type: "string" },
+    description: { type: "string" },
+    parameters: { type: "array", items: publicParameterSchema },
+    scenarios: { type: "array", items: publicScenarioSchema },
+    produced_metrics: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          id: { type: "string" },
+          unit: { type: "string" },
+          description: { type: "string" },
+        },
+        required: ["id", "unit", "description"],
+      },
+    },
+  },
+  required: [
+    "id",
+    "version",
+    "description",
+    "parameters",
+    "scenarios",
+    "produced_metrics",
+  ],
+};
+
+export const kitListOutputSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    schemaVersion: { const: MODELICA_RESULTS_SCHEMA_VERSION },
+    kind: { const: "kit-list" },
+    kits: { type: "array", items: publicKitSchema },
+  },
+  required: ["schemaVersion", "kind", "kits"],
+};
+
 export const runOutputSchema = {
   type: "object",
   additionalProperties: false,
@@ -163,6 +260,18 @@ export function toRunResult(run: SimulationRun): StructuredToolResult {
     content: `Persisted simulation run ${run.run_id}: ${run.status}; ${
       Object.keys(run.metrics).length
     } metrics and ${run.artifacts.length} artifacts.`,
+    structuredContent,
+  };
+}
+
+export function toKitListResult(kits: PublicKit[]): StructuredToolResult {
+  const structuredContent: ModelicaKitListResultEnvelope = {
+    schemaVersion: MODELICA_RESULTS_SCHEMA_VERSION,
+    kind: "kit-list",
+    kits,
+  };
+  return {
+    content: `Found ${kits.length} approved Modelica kit${kits.length === 1 ? "" : "s"}.`,
     structuredContent,
   };
 }
