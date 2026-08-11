@@ -1,0 +1,114 @@
+{
+  "artifacts": [
+    {
+      "bytes": 74,
+      "kind": "request",
+      "sha256": "f770b8a321b6b65baa1d67fdb4219235f8ee67852dc0765952f4865db551628f",
+      "uri": "casys://modelica/runs/run_11111111-1111-4111-8111-111111111111/request.json"
+    },
+    {
+      "bytes": 524,
+      "kind": "resolved_parameters",
+      "sha256": "5a16751e9545f3074f1c34eafa356c94f55543048395413e3907c9716a36cb09",
+      "uri": "casys://modelica/runs/run_11111111-1111-4111-8111-111111111111/resolved-parameters.json"
+    },
+    {
+      "bytes": 2572,
+      "kind": "model",
+      "sha256": "a641b63a493435fd2ce8123a7b6afbd478656a124610ca33d22112985af8e8ec",
+      "uri": "casys://modelica/runs/run_11111111-1111-4111-8111-111111111111/CoffeeMachine.mo"
+    },
+    {
+      "bytes": 25,
+      "kind": "script",
+      "sha256": "c54160871b4fd1c72a7e785c6b588f071a464cdd18659f67e6868f583f144f8e",
+      "uri": "casys://modelica/runs/run_11111111-1111-4111-8111-111111111111/run.mos"
+    },
+    {
+      "bytes": 27,
+      "kind": "diagnostics",
+      "sha256": "86154846299a0f170975b01b28f41dd07592924784f5dfc02fb261500d2fec85",
+      "uri": "casys://modelica/runs/run_11111111-1111-4111-8111-111111111111/omc.log"
+    },
+    {
+      "bytes": 29,
+      "kind": "evidence",
+      "sha256": "3587ddc617ade735f8745c5fd4e7361ad46df17a3e8aea60b93fcd3c0451fb86",
+      "uri": "casys://modelica/runs/run_11111111-1111-4111-8111-111111111111/evidence.json"
+    }
+  ],
+  "completed_at": "2026-08-10T00:00:01.000Z",
+  "engine": {
+    "msl_version": "4.1.0",
+    "name": "OpenModelica",
+    "version": "1.25.1"
+  },
+  "fingerprint": "38345b52adc0d2704cc453066398acd05ab29f1858306316ec9639b3e1e43fa6",
+  "metrics": {
+    "heater_energy": {
+      "unit": "J",
+      "value": 315000
+    },
+    "heater_power_peak": {
+      "unit": "W",
+      "value": 1500
+    },
+    "time_to_target_temperature": {
+      "unit": "s",
+      "value": 200
+    },
+    "water_temperature_max": {
+      "unit": "degC",
+      "value": 94
+    }
+  },
+  "model": {
+    "id": "coffee-machine-v1",
+    "sha256": "a641b63a493435fd2ce8123a7b6afbd478656a124610ca33d22112985af8e8ec",
+    "version": "0.1.0"
+  },
+  "resolved_parameters": {
+    "ambient_temperature": {
+      "unit": "degC",
+      "value": 20
+    },
+    "boiler_heat_capacity": {
+      "unit": "J/K",
+      "value": 500
+    },
+    "heat_loss_conductance": {
+      "unit": "W/K",
+      "value": 5
+    },
+    "heater_power": {
+      "unit": "W",
+      "value": 1500
+    },
+    "hysteresis": {
+      "unit": "K",
+      "value": 2
+    },
+    "initial_water_temperature": {
+      "unit": "degC",
+      "value": 20
+    },
+    "setpoint_temperature": {
+      "unit": "degC",
+      "value": 93
+    },
+    "water_mass": {
+      "unit": "kg",
+      "value": 0.5
+    }
+  },
+  "run_id": "run_11111111-1111-4111-8111-111111111111",
+  "scenario": {
+    "id": "heat-up-nominal",
+    "sha256": "5db8a06592050a03a8d727900801f9185b2e7fa2fb3092ce15dd3c6c70eb0941"
+  },
+  "started_at": "2026-08-10T00:00:00.000Z",
+  "status": "succeeded",
+  "warnings": [
+    "Frozen 0.2.x ledger fixture."
+  ]
+}

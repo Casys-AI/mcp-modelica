@@ -122,13 +122,47 @@ export function createRunComponentRegistry(): ViewComponentRegistry<
                   value: `${data.engine.name} ${data.engine.version}`,
                 },
                 { id: "msl", label: "Modelica Standard Library", value: data.engine.msl_version },
-                { id: "fingerprint", label: "Fingerprint", value: <code>{data.fingerprint}</code> },
-                { id: "model-hash", label: "Model hash", value: <code>{data.model.sha256}</code> },
                 {
-                  id: "scenario-hash",
-                  label: "Scenario hash",
-                  value: <code>{data.scenario.sha256}</code>,
+                  id: "record-schema",
+                  label: "Run record contract",
+                  value: data.record_schema_version,
                 },
+                { id: "fingerprint", label: "Fingerprint", value: <code>{data.fingerprint}</code> },
+                {
+                  id: "model-source-hash",
+                  label: "Model source hash",
+                  value: <code>{data.model.source_sha256}</code>,
+                },
+                ...(data.scenario.source_sha256
+                  ? [{
+                    id: "scenario-source-hash",
+                    label: "Native scenario source hash",
+                    value: <code>{data.scenario.source_sha256}</code>,
+                  }]
+                  : [{
+                    id: "scenario-source-hash-unavailable",
+                    label: "Native scenario source hash",
+                    value: "Not recorded by the 1.0 ledger",
+                  }]),
+                {
+                  id: "scenario-projection-hash",
+                  label: "Scenario projection hash",
+                  value: <code>{data.scenario.projection_sha256}</code>,
+                },
+                ...(data.parameter_schema
+                  ? [{
+                    id: "parameter-schema-source-hash",
+                    label: "Compiler parameter-schema hash",
+                    value: <code>{data.parameter_schema.source_sha256}</code>,
+                  }]
+                  : []),
+                ...(data.result_normalizer
+                  ? [{
+                    id: "result-normalizer",
+                    label: "Result normalizer",
+                    value: `${data.result_normalizer.id} · ${data.result_normalizer.version}`,
+                  }]
+                  : []),
               ]}
             />
           </Card>
@@ -249,7 +283,11 @@ export function createRunListComponentRegistry(): ViewComponentRegistry<
               label="Persisted Modelica runs"
               rows={data}
               rowKey={(run) => run.run_id}
-              onSelect={(run) => void context.navigate("detail", { runId: run.run_id })}
+              onSelect={(run) =>
+                void context.navigate("detail", {
+                  runId: run.run_id,
+                  recorded: run.record_schema_version === "2.0",
+                })}
               columns={[
                 { id: "run", label: "Run", render: (run) => <code>{run.run_id}</code> },
                 {

@@ -1,0 +1,75 @@
+{
+  "generatedBy": {
+    "api": "OpenModelica.Scripting.getModelInstance",
+    "engine": "OpenModelica",
+    "version": "1.27.0"
+  },
+  "modelName": "CoffeeMachine",
+  "modelSourceSha256": "a641b63a493435fd2ce8123a7b6afbd478656a124610ca33d22112985af8e8ec",
+  "parameters": [
+    {
+      "defaultValue": 0.5,
+      "description": "Water held in the boiler",
+      "modelicaType": "Modelica.Units.SI.Mass",
+      "name": "waterMass",
+      "unit": "kg"
+    },
+    {
+      "defaultValue": 4180,
+      "description": "",
+      "modelicaType": "Modelica.Units.SI.SpecificHeatCapacity",
+      "name": "waterSpecificHeatCapacity",
+      "unit": "J/(kg.K)"
+    },
+    {
+      "defaultValue": 500,
+      "description": "",
+      "modelicaType": "Modelica.Units.SI.HeatCapacity",
+      "name": "boilerHeatCapacity",
+      "unit": "J/K"
+    },
+    {
+      "defaultValue": 293.15,
+      "description": "",
+      "modelicaType": "Modelica.Units.SI.Temperature",
+      "name": "initialWaterTemperature",
+      "unit": "K"
+    },
+    {
+      "defaultValue": 293.15,
+      "description": "",
+      "modelicaType": "Modelica.Units.SI.Temperature",
+      "name": "ambientTemperature",
+      "unit": "K"
+    },
+    {
+      "defaultValue": 1500,
+      "description": "",
+      "modelicaType": "Modelica.Units.SI.Power",
+      "name": "heaterPowerRated",
+      "unit": "W"
+    },
+    {
+      "defaultValue": 5,
+      "description": "",
+      "modelicaType": "Modelica.Units.SI.ThermalConductance",
+      "name": "heatLossConductance",
+      "unit": "W/K"
+    },
+    {
+      "defaultValue": 366.15,
+      "description": "",
+      "modelicaType": "Modelica.Units.SI.Temperature",
+      "name": "setpointTemperature",
+      "unit": "K"
+    },
+    {
+      "defaultValue": 2,
+      "description": "",
+      "modelicaType": "Modelica.Units.SI.TemperatureDifference",
+      "name": "hysteresis",
+      "unit": "K"
+    }
+  ],
+  "schemaVersion": "1"
+}

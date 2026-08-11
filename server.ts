@@ -7,6 +7,13 @@
 import { McpApp, type RegisterViewersSummary } from "@casys/mcp-server";
 import { ModelicaToolsClient } from "./src/client.ts";
 import { createModelicaService, type ModelicaService } from "./src/domain/service.ts";
+import { ModelicaEvidenceResources } from "./src/resources/modelica-evidence-resources.ts";
+import { ResumableSimulationService } from "./src/application/resumable-simulation-service.ts";
+import { ResumableSimulationToolsClient } from "./src/resumable-client.ts";
+import { ResumableEvidenceResources } from "./src/resources/resumable-evidence-resources.ts";
+import { RequestStore } from "./src/storage/request-store.ts";
+import { FileRequestLockPort } from "./src/storage/request-lock.ts";
+import { FileSimulationWorkspace } from "./src/storage/simulation-workspace.ts";
 
 const DEFAULT_HTTP_PORT = 3016;
 
@@ -25,30 +32,78 @@ export interface ResultsViewerFileSystem {
 export interface ModelicaServer {
   server: McpApp;
   toolsClient: ModelicaToolsClient;
+  resumableToolsClient: ResumableSimulationToolsClient;
   viewerRegistration: RegisterViewersSummary;
+  evidenceResources: ModelicaEvidenceResources;
+  resumableEvidenceResources: ResumableEvidenceResources;
 }
 
 export async function createModelicaServer(
   options: CreateModelicaServerOptions = {},
 ): Promise<ModelicaServer> {
   const service = options.service ?? await createModelicaService();
-  const toolsClient = new ModelicaToolsClient(service);
+  const logger = options.logger ??
+    ((message: string) => console.error(`[mcp-modelica] ${message}`));
   const server = new McpApp({
     name: "mcp-modelica",
-    version: "0.2.0",
+    version: "0.4.0",
     maxConcurrent: 1,
     backpressureStrategy: "queue",
     transport: "stateless",
     validateSchema: true,
-    logger: options.logger ?? ((message) => console.error(`[mcp-modelica] ${message}`)),
+    // Runs are created after the stateless HTTP transport starts. Predeclare
+    // resources so their exact evidence can be registered safely afterwards.
+    expectResources: true,
+    logger,
   });
-  server.registerTools(toolsClient.toMCPFormat(), toolsClient.buildHandlersMap());
+  const evidenceResources = new ModelicaEvidenceResources(server, service);
+  await evidenceResources.publishInitial();
+  const resumableStore = new RequestStore(service.getRunsDirectory());
+  const resumableService = new ResumableSimulationService(
+    service,
+    resumableStore,
+    new FileRequestLockPort(resumableStore.locksDirectory),
+    new FileSimulationWorkspace(service.getRunsDirectory(), service.getSimulationRunner()),
+  );
+  const resumableEvidenceResources = new ResumableEvidenceResources(server, resumableService);
+  await resumableEvidenceResources.publishInitial();
+  const toolsClient = new ModelicaToolsClient(service, {
+    onPersistedRun: (run) => evidenceResources.publishRun(run),
+    onPersistedRunProjectionError: (error, run) => {
+      logger(
+        `[WARN] Durable run ${run.run_id} succeeded but its resource projection failed; ` +
+          `modelica_run_get will retry: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    },
+  });
+  const resumableToolsClient = new ResumableSimulationToolsClient(resumableService, {
+    onCompletedRequest: (requestId) => resumableEvidenceResources.publishRequest(requestId),
+    onProjectionError: (error, requestId) => {
+      logger(
+        `[WARN] Durable resumable request ${requestId} succeeded but its resource projection failed; ` +
+          `modelica_simulation_request_get will retry: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+      );
+    },
+  });
+  server.registerTools(
+    [...toolsClient.toMCPFormat(), ...resumableToolsClient.toMCPFormat()],
+    new Map([...toolsClient.buildHandlersMap(), ...resumableToolsClient.buildHandlersMap()]),
+  );
   const viewerRegistration = registerResultsViewer(
     server,
     options.viewerFileSystem,
     options.viewerModuleUrl,
   );
-  return { server, toolsClient, viewerRegistration };
+  return {
+    server,
+    toolsClient,
+    resumableToolsClient,
+    viewerRegistration,
+    evidenceResources,
+    resumableEvidenceResources,
+  };
 }
 
 /**
@@ -126,7 +181,7 @@ function isRemoteViewerUrl(path: string): boolean {
 
 if (import.meta.main) {
   const cli = parseCli(Deno.args);
-  const { server, toolsClient } = await createModelicaServer();
+  const { server, toolsClient, resumableToolsClient } = await createModelicaServer();
   await server.startHttp({
     port: cli.port,
     hostname: cli.hostname,
@@ -137,7 +192,9 @@ if (import.meta.main) {
       );
     },
   });
-  console.error(`[mcp-modelica] Server ready (${toolsClient.count} tools).`);
+  console.error(
+    `[mcp-modelica] Server ready (${toolsClient.count + resumableToolsClient.count} tools).`,
+  );
 }
 
 interface CliOptions {

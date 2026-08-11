@@ -102,7 +102,7 @@ function createListView(
   });
 }
 
-type DetailArgs = ResultsEnvelope | { runId: string };
+type DetailArgs = ResultsEnvelope | { runId: string; recorded: boolean };
 type DetailData =
   | { run: SimulationRun; localDrilldown: boolean }
   | { error: string };
@@ -117,7 +117,10 @@ function createDetailView(
         throw new TypeError("A run-list cannot be rendered as a run detail.");
       }
       try {
-        const result = await ctx.callTool("modelica_run_get", { run_id: args.runId });
+        const result = await ctx.callTool(
+          args.recorded ? "modelica_run_get_recorded" : "modelica_run_get",
+          { run_id: args.runId },
+        );
         if (result.isError) return { error: errorMessage(result) };
         const envelope = parseResultsEnvelope(result.structuredContent);
         return envelope.kind === "run"

@@ -1,0 +1,12 @@
+{
+  "id": "linear-ramp-nominal",
+  "description": "Solver-conformance ramp from 20 degC at 1 K/s for two seconds; no physical heat balance is claimed.",
+  "start_time_s": 0,
+  "stop_time_s": 2,
+  "number_of_intervals": 20,
+  "solver": "dassl",
+  "target_temperature": {
+    "value": 22,
+    "unit": "degC"
+  }
+}
