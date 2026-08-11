@@ -1,7 +1,13 @@
 import { join } from "@std/path";
 import { ValidationError } from "../domain/errors.ts";
 import { sha256 } from "../domain/hashing.ts";
-import { makeDurableDirectory, removeDurable, writeDurableText } from "./durable.ts";
+import {
+  confirmDurableFile,
+  makeDurableDirectory,
+  removeDurable,
+  syncDirectory,
+  writeDurableText,
+} from "./durable.ts";
 import { OsLock } from "./os-lock.ts";
 
 export const MAX_STORED_RUNS = 20;
@@ -12,6 +18,14 @@ interface SlotReservation {
   schemaVersion: "capacity/1";
   kind: "legacy" | "request";
   slot_reserved: true;
+}
+
+/** A known election loser, distinct from a failed durability publication. */
+export class CapacityReservationExistsError extends ValidationError {
+  constructor(kind: SlotReservation["kind"], id: string) {
+    super(`Capacity reservation '${kind}-${id}' already exists.`);
+    this.name = "CapacityReservationExistsError";
+  }
 }
 
 /**
@@ -40,7 +54,7 @@ export class CapacityCoordinator {
       await Deno.mkdir(this.claimsDirectory, { recursive: true });
       try {
         await Deno.stat(path);
-        throw new ValidationError(`Capacity reservation '${kind}-${id}' already exists.`);
+        throw new CapacityReservationExistsError(kind, id);
       } catch (error) {
         if (!(error instanceof Deno.errors.NotFound)) throw error;
       }
@@ -61,6 +75,26 @@ export class CapacityCoordinator {
   /** A hash-derived filename keeps caller selectors out of filesystem paths. */
   async requestClaimPath(requestId: string): Promise<string> {
     return await this.reservationPath("request", requestId);
+  }
+
+  /**
+   * Read and fsync an existing request claim under the capacity lock. A caller
+   * may use it as an execution prerequisite even when an earlier atomic rename
+   * became visible before its parent-directory fsync reported success.
+   */
+  async readDurableRequestClaim(requestId: string): Promise<string | undefined> {
+    const path = await this.requestClaimPath(requestId);
+    return await this.withGlobalLock(async () => {
+      let source: string;
+      try {
+        source = await Deno.readTextFile(path);
+      } catch (error) {
+        if (error instanceof Deno.errors.NotFound) return undefined;
+        throw error;
+      }
+      await confirmDurableFile(path);
+      return source;
+    });
   }
 
   async updateRequestClaim(requestId: string, source: string): Promise<void> {
@@ -195,6 +229,7 @@ export class CapacityCoordinator {
     reservationPath: string,
     source: string,
     expectedSource: string,
+    abandonedRunId?: string,
   ): Promise<void> {
     await this.withGlobalLock(async () => {
       let current: string;
@@ -210,6 +245,17 @@ export class CapacityCoordinator {
         throw new ValidationError(
           "Simulation request claim changed before rejection; terminal evidence is immutable.",
         );
+      }
+      if (abandonedRunId !== undefined) {
+        assertSafePromotingRejection(current, source, abandonedRunId);
+        // The directory is created before the running transition and no caller
+        // can write artifacts or start OMC while the durable state is still
+        // promoting. Remove only an empty directory; any unexpected evidence
+        // fails closed and leaves the reserving claim untouched.
+        await removeDurable(join(this.runsDirectory, abandonedRunId));
+        // Also fsync an already-absent directory entry when resuming a crash
+        // between the prior cleanup and the terminal rejected claim.
+        await syncDirectory(this.runsDirectory);
       }
       await writeDurableText(reservationPath, source);
     });
@@ -346,6 +392,51 @@ function hasExactKeys(value: Record<string, unknown>, expected: readonly string[
   return keys.length === expected.length && keys.every((key) => expected.includes(key));
 }
 
+function assertSafePromotingRejection(
+  currentSource: string,
+  rejectedSource: string,
+  runId: string,
+): void {
+  if (!RUN_DIRECTORY.test(runId)) {
+    throw new ValidationError("Rejected promoting claim has an invalid run_id.");
+  }
+  let current: unknown;
+  let rejected: unknown;
+  try {
+    current = JSON.parse(currentSource);
+    rejected = JSON.parse(rejectedSource);
+  } catch {
+    throw new ValidationError("Promoting claim cleanup requires valid JSON evidence.");
+  }
+  if (
+    current === null || rejected === null || typeof current !== "object" ||
+    typeof rejected !== "object" || Array.isArray(current) || Array.isArray(rejected)
+  ) {
+    throw new ValidationError("Promoting claim cleanup requires object evidence.");
+  }
+  const before = current as Record<string, unknown>;
+  const after = rejected as Record<string, unknown>;
+  const identityKeys = [
+    "schemaVersion",
+    "kind",
+    "request_id",
+    "request_sha256",
+    "manifest_sha256",
+    "run_id",
+  ] as const;
+  if (
+    before.schemaVersion !== "2.1" || before.kind !== "simulation-request-claim" ||
+    before.state !== "promoting" || before.slot_reserved !== true || before.run_id !== runId ||
+    after.state !== "rejected" || after.slot_reserved !== false || after.run_id !== runId ||
+    after.rejection !== "manifest_mismatch" ||
+    identityKeys.some((key) => before[key] !== after[key])
+  ) {
+    throw new ValidationError(
+      "Only the empty run directory owned by the exact promoting claim may be released.",
+    );
+  }
+}
+
 export class CapacityReservation {
   private active = true;
 
@@ -377,9 +468,14 @@ export class CapacityReservation {
     this.active = false;
   }
 
-  async rejectRequest(source: string): Promise<void> {
+  async rejectRequest(source: string, abandonedRunId?: string): Promise<void> {
     if (!this.active) throw new ValidationError("Capacity reservation is no longer active.");
-    await this.coordinator.rejectRequest(this.path, source, this.expectedSource);
+    await this.coordinator.rejectRequest(
+      this.path,
+      source,
+      this.expectedSource,
+      abandonedRunId,
+    );
     this.active = false;
   }
 

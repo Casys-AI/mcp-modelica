@@ -105,7 +105,7 @@ export interface RequestCapacityReservationPort {
     promotingSource: string,
     runningSource: string,
   ): Promise<void>;
-  rejectRequest(source: string): Promise<void>;
+  rejectRequest(source: string, abandonedRunId?: string): Promise<void>;
   release(): Promise<void>;
 }
 

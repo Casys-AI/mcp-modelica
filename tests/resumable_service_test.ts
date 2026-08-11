@@ -4,6 +4,7 @@ import { createModelicaService } from "../src/domain/service.ts";
 import { FileRequestLockPort } from "../src/storage/request-lock.ts";
 import { RequestStore } from "../src/storage/request-store.ts";
 import { FileSimulationWorkspace } from "../src/storage/simulation-workspace.ts";
+import { removeDurable } from "../src/storage/durable.ts";
 import { sha256, stableJson } from "../src/domain/hashing.ts";
 import type { ManifestResource } from "../src/domain/simulation-manifest.ts";
 import { FakeRunner } from "./test-helpers.ts";
@@ -90,6 +91,70 @@ Deno.test("2.1 rejects every pre-claim validation failure without a claim or run
   }
 });
 
+Deno.test("a visible claim from a failed publication is not execution authority before fsync", async () => {
+  const directory = await Deno.makeTempDir({ prefix: "mcp-modelica-claim-durability-" });
+  try {
+    const runner = new FakeRunner();
+    let executions = 0;
+    const execute = runner.execute.bind(runner);
+    runner.execute = async (runnerInput) => {
+      executions++;
+      return await execute(runnerInput);
+    };
+    const legacy = await createModelicaService({ runsDirectory: directory, runner });
+    const store = new RequestStore(directory);
+    const service = new ResumableSimulationService(
+      legacy,
+      store,
+      new FileRequestLockPort(store.locksDirectory),
+      new FileSimulationWorkspace(directory, runner),
+    );
+    const input = await explicitInput(legacy, service, "post-rename-fsync-failure");
+    const getIdentity = legacy.getRuntimeEngineIdentity.bind(legacy);
+    let probes = 0;
+    legacy.getRuntimeEngineIdentity = async () => {
+      probes++;
+      return await getIdentity();
+    };
+
+    const reserve = store.capacity.reserve.bind(store.capacity);
+    store.capacity.reserve = async (...args: Parameters<typeof reserve>) => {
+      await reserve(...args);
+      // Exact failure class under review: rename made the claim visible, but
+      // reserve did not return a successful durability receipt to the caller.
+      throw new Error("injected post-rename parent fsync failure");
+    };
+    await assertRejects(
+      () => service.submit(input),
+      Error,
+      "post-rename parent fsync failure",
+    );
+    store.capacity.reserve = reserve;
+    assertEquals((await store.readClaim(input.request_id))?.state, "claimed");
+    assertEquals(probes, 0);
+    assertEquals(executions, 0);
+
+    const readDurableClaim = store.capacity.readDurableRequestClaim.bind(store.capacity);
+    store.capacity.readDurableRequestClaim = () =>
+      Promise.reject(new Error("injected claim durability confirmation failure"));
+    await assertRejects(
+      () => service.submit(input),
+      Error,
+      "claim durability confirmation failure",
+    );
+    assertEquals(probes, 0, "an unconfirmed visible claim must not authorize an OMC probe");
+    assertEquals(executions, 0);
+
+    store.capacity.readDurableRequestClaim = readDurableClaim;
+    const completed = await service.submit(input);
+    assertEquals((completed.request as { status: string }).status, "completed");
+    assertEquals(probes, 1, "execution is allowed only after the claim fsync succeeds");
+    assertEquals(executions, 1);
+  } finally {
+    await Deno.remove(directory, { recursive: true });
+  }
+});
+
 Deno.test("manifest drift after claim is an immutable rejected request and releases capacity", async () => {
   const directory = await Deno.makeTempDir({ prefix: "mcp-modelica-resumable-rejected-" });
   try {
@@ -152,6 +217,128 @@ Deno.test("manifest drift after claim is an immutable rejected request and relea
 
     const releasedSlot = await store.capacity.reserve("legacy", "slot-after-rejection");
     await releasedSlot.release();
+  } finally {
+    await Deno.remove(directory, { recursive: true });
+  }
+});
+
+Deno.test("promoting manifest rejection removes only its empty run and releases capacity", async () => {
+  const directory = await Deno.makeTempDir({ prefix: "mcp-modelica-promoting-rejected-" });
+  try {
+    for (let index = 0; index < 19; index++) {
+      await Deno.mkdir(`${directory}/run_${crypto.randomUUID()}`);
+    }
+    const runner = new FakeRunner();
+    let executions = 0;
+    const execute = runner.execute.bind(runner);
+    runner.execute = async (runnerInput) => {
+      executions++;
+      return await execute(runnerInput);
+    };
+    const legacy = await createModelicaService({ runsDirectory: directory, runner });
+    const store = new RequestStore(directory);
+    const service = new ResumableSimulationService(
+      legacy,
+      store,
+      new FileRequestLockPort(store.locksDirectory),
+      new FileSimulationWorkspace(directory, runner),
+    );
+    const input = await explicitInput(legacy, service, "promoting-manifest-rejected");
+    const claimed = await store.claimOrRead(await importCanonical(input));
+    if (claimed.claim.state !== "claimed") throw new Error("expected a new claimed request");
+    const abandonedRunId = `run_${crypto.randomUUID()}`;
+    await overwriteClaimForTest(store, {
+      ...claimed.claim,
+      state: "promoting",
+      slot_reserved: true,
+      run_id: abandonedRunId,
+    });
+    await Deno.mkdir(`${directory}/${abandonedRunId}`);
+
+    const getIdentity = legacy.getRuntimeEngineIdentity.bind(legacy);
+    const identity = await getIdentity();
+    legacy.getRuntimeEngineIdentity = () =>
+      Promise.resolve({ ...identity, version: `${identity.version}-drifted` });
+    const rejected = await service.submit(input);
+    assertEquals((rejected.request as { status: string }).status, "rejected");
+    assertEquals(executions, 0);
+    await assertRejects(
+      () => Deno.stat(`${directory}/${abandonedRunId}`),
+      Deno.errors.NotFound,
+    );
+    assertEquals((await store.readClaim(input.request_id))?.state, "rejected");
+
+    const released = await store.capacity.reserve("legacy", "slot-after-promoting-rejection");
+    await released.release();
+  } finally {
+    await Deno.remove(directory, { recursive: true });
+  }
+});
+
+Deno.test("promoting rejection cleanup is retryable and never deletes unexpected evidence", async () => {
+  const directory = await Deno.makeTempDir({ prefix: "mcp-modelica-promoting-cleanup-crash-" });
+  try {
+    const runner = new FakeRunner();
+    let executions = 0;
+    const execute = runner.execute.bind(runner);
+    runner.execute = async (runnerInput) => {
+      executions++;
+      return await execute(runnerInput);
+    };
+    const legacy = await createModelicaService({ runsDirectory: directory, runner });
+    const store = new RequestStore(directory);
+    const service = new ResumableSimulationService(
+      legacy,
+      store,
+      new FileRequestLockPort(store.locksDirectory),
+      new FileSimulationWorkspace(directory, runner),
+    );
+    const input = await explicitInput(legacy, service, "promoting-cleanup-crash");
+    const guardedInput = await explicitInput(legacy, service, "promoting-evidence-guard");
+    const claimed = await store.claimOrRead(await importCanonical(input));
+    if (claimed.claim.state !== "claimed") throw new Error("expected a new claimed request");
+    const abandonedRunId = `run_${crypto.randomUUID()}`;
+    const promoting = {
+      ...claimed.claim,
+      state: "promoting" as const,
+      slot_reserved: true as const,
+      run_id: abandonedRunId,
+    };
+    await overwriteClaimForTest(store, promoting);
+    await Deno.mkdir(`${directory}/${abandonedRunId}`);
+    // Exact hard-crash recovery point: the empty directory was removed and its
+    // parent synced, but the terminal rejected claim was not written yet.
+    await removeDurable(`${directory}/${abandonedRunId}`);
+
+    const getIdentity = legacy.getRuntimeEngineIdentity.bind(legacy);
+    const identity = await getIdentity();
+    legacy.getRuntimeEngineIdentity = () =>
+      Promise.resolve({ ...identity, version: `${identity.version}-drifted` });
+    const retried = await service.submit(input);
+    assertEquals((retried.request as { status: string }).status, "rejected");
+    assertEquals(executions, 0);
+
+    const guardedClaim = await store.claimOrRead(await importCanonical(guardedInput));
+    if (guardedClaim.claim.state !== "claimed") throw new Error("expected a guarded claim");
+    const guardedRunId = `run_${crypto.randomUUID()}`;
+    await overwriteClaimForTest(store, {
+      ...guardedClaim.claim,
+      state: "promoting",
+      slot_reserved: true,
+      run_id: guardedRunId,
+    });
+    await Deno.mkdir(`${directory}/${guardedRunId}`);
+    await Deno.writeTextFile(`${directory}/${guardedRunId}/unexpected-evidence.txt`, "retain\n");
+    await assertRejects(
+      () => service.submit(guardedInput),
+      Error,
+    );
+    assertEquals((await store.readClaim(guardedInput.request_id))?.state, "promoting");
+    assertEquals(
+      await Deno.readTextFile(`${directory}/${guardedRunId}/unexpected-evidence.txt`),
+      "retain\n",
+    );
+    assertEquals(executions, 0);
   } finally {
     await Deno.remove(directory, { recursive: true });
   }

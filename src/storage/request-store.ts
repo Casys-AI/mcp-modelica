@@ -11,7 +11,7 @@ import type {
   SimulationRequestStorePort,
 } from "../domain/resumable-contracts.ts";
 import type { ManifestResource } from "../domain/simulation-manifest.ts";
-import { CapacityCoordinator } from "./capacity-coordinator.ts";
+import { CapacityCoordinator, CapacityReservationExistsError } from "./capacity-coordinator.ts";
 import { readCanonicalUtf8, utf8Bytes, writeDurableText } from "./durable.ts";
 
 const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
@@ -58,7 +58,7 @@ export class RequestStore implements SimulationRequestStorePort {
     reservation?: RequestCapacityReservationPort;
     created: boolean;
   }> {
-    const found = await this.readClaim(request.request_id);
+    const found = await this.readDurableClaim(request.request_id);
     if (found) {
       assertSameRequest(found, request);
       return { claim: found, created: false };
@@ -80,13 +80,23 @@ export class RequestStore implements SimulationRequestStorePort {
       );
       return { claim, reservation, created: true };
     } catch (error) {
+      if (!(error instanceof CapacityReservationExistsError)) throw error;
       // A second process may have atomically installed the same claim after
-      // our pre-read.  Re-read it once; any other error remains authoritative.
-      const raced = await this.readClaim(request.request_id);
+      // our pre-read. Re-read and fsync that exact winner once; a failed claim
+      // publication must never be mistaken for election contention.
+      const raced = await this.readDurableClaim(request.request_id);
       if (!raced) throw error;
       assertSameRequest(raced, request);
       return { claim: raced, created: false };
     }
+  }
+
+  private async readDurableClaim(
+    requestId: string,
+  ): Promise<SimulationRequestClaim | undefined> {
+    assertRequestId(requestId);
+    const source = await this.capacity.readDurableRequestClaim(requestId);
+    return source === undefined ? undefined : parseClaim(source, requestId);
   }
 
   async readClaim(requestId: string): Promise<SimulationRequestClaim | undefined> {
@@ -183,7 +193,7 @@ export class RequestStore implements SimulationRequestStorePort {
     if (claim.state !== "rejected" || claim.slot_reserved) {
       throw new ValidationError("A rejected request must release its capacity reservation.");
     }
-    await reservation.rejectRequest(stableJson(claim));
+    await reservation.rejectRequest(stableJson(claim), claim.run_id);
     return claim;
   }
 

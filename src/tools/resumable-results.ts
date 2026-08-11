@@ -4,29 +4,34 @@ import type { SimulationManifest } from "../domain/simulation-manifest.ts";
 
 export const MODELICA_RESUMABLE_RESULTS_SCHEMA_VERSION = "2.1" as const;
 
-const digest = { type: "string", pattern: "^[0-9a-f]{64}$" };
-const runId = {
+type JsonSchema = Record<string, unknown>;
+
+const digest: JsonSchema = { type: "string", pattern: "^[0-9a-f]{64}$" };
+const runId: JsonSchema = {
   type: "string",
   pattern: "^run_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
 };
-const quantity = closed({ value: { type: "number" }, unit: { type: "string", minLength: 1 } }, [
+const quantity: JsonSchema = closed({
+  value: { type: "number" },
+  unit: { type: "string", minLength: 1 },
+}, [
   "value",
   "unit",
 ]);
-const conversion = closed({
+const conversion: JsonSchema = closed({
   from: { type: "string", minLength: 1 },
   to: { type: "string", minLength: 1 },
   factor: { type: "number" },
   offset: { type: "number" },
 }, ["from", "to", "factor", "offset"]);
-const resource = closed({
+const resource: JsonSchema = closed({
   uri: { type: "string", minLength: 1 },
   mediaType: { type: "string", minLength: 1 },
   bytes: { type: "integer", minimum: 0 },
   sha256: digest,
   qualification: { enum: ["qualified-kit", "compiler-derived-verified"] },
 }, ["uri", "mediaType", "bytes", "sha256", "qualification"]);
-const publicScenario = closed({
+const publicScenario: JsonSchema = closed({
   id: { type: "string", minLength: 1 },
   description: { type: "string" },
   start_time_s: { type: "number" },
@@ -43,7 +48,7 @@ const publicScenario = closed({
   "solver",
   "target_temperature",
 ]);
-const manifestParameter = closed({
+const manifestParameter: JsonSchema = closed({
   id: { type: "string", minLength: 1 },
   modelica_name: { type: "string", minLength: 1 },
   modelica_type: { type: "string", minLength: 1 },
@@ -62,26 +67,26 @@ const manifestParameter = closed({
   "maximum",
   "conversion",
 ]);
-const metric = closed({
+const metric: JsonSchema = closed({
   id: { type: "string", minLength: 1 },
   unit: { type: "string", minLength: 1 },
   description: { type: "string" },
   required: { type: "boolean" },
 }, ["id", "unit", "description", "required"]);
-const identity = closed({
+const identity: JsonSchema = closed({
   id: { type: "string", minLength: 1 },
   version: { type: "string", minLength: 1 },
 }, [
   "id",
   "version",
 ]);
-const engine = closed({
+const engine: JsonSchema = closed({
   name: { type: "string", minLength: 1 },
   version: { type: "string", minLength: 1 },
   msl_version: { type: "string", minLength: 1 },
 }, ["name", "version", "msl_version"]);
 
-const manifest = closed({
+const manifest: JsonSchema = closed({
   schemaVersion: { const: MODELICA_RESUMABLE_RESULTS_SCHEMA_VERSION },
   fingerprint: digest,
   manifest_sha256: digest,
@@ -116,7 +121,7 @@ const manifest = closed({
   "engine",
 ], ["parameter_schema"]);
 
-const artifactCommon = {
+const artifactCommon: JsonSchema = {
   kind: {
     enum: [
       "request",
@@ -139,7 +144,7 @@ const artifactCommon = {
   qualification: { enum: ["qualified-kit", "compiler-derived-verified"] },
   source_resource: resource,
 };
-const requestArtifact = closed({
+const requestArtifact: JsonSchema = closed({
   kind: { const: "request" },
   file_name: { const: "request.json" },
   uri: { type: "string", minLength: 1 },
@@ -147,7 +152,7 @@ const requestArtifact = closed({
   sha256: digest,
   bytes: { type: "integer", minimum: 0 },
 }, ["kind", "file_name", "uri", "mediaType", "sha256", "bytes"]);
-const runArtifact = closed({ ...artifactCommon }, [
+const runArtifact: JsonSchema = closed({ ...artifactCommon }, [
   "kind",
   "file_name",
   "run_id",
@@ -156,7 +161,7 @@ const runArtifact = closed({ ...artifactCommon }, [
   "sha256",
   "bytes",
 ], ["qualification", "source_resource"]);
-const runJson = closed({
+const runJson: JsonSchema = closed({
   uri: { type: "string", minLength: 1 },
   mediaType: { const: "application/json" },
   sha256: digest,
@@ -167,7 +172,7 @@ const runJson = closed({
   "sha256",
   "bytes",
 ]);
-const run = closed({
+const run: JsonSchema = closed({
   schemaVersion: { const: MODELICA_RESUMABLE_RESULTS_SCHEMA_VERSION },
   kind: { const: "simulation-run" },
   request_id: { type: "string", minLength: 1 },
@@ -199,25 +204,25 @@ const run = closed({
   "run_json",
 ]);
 
-const requestBase = {
+const requestBase: JsonSchema = {
   request_id: { type: "string", minLength: 1 },
   request_sha256: digest,
   manifest_sha256: digest,
   status: { enum: ["pending", "running", "completed", "rejected", "recovery_required"] },
 };
-const pendingRequest = closed({ ...requestBase, status: { const: "pending" } }, [
+const pendingRequest: JsonSchema = closed({ ...requestBase, status: { const: "pending" } }, [
   "request_id",
   "request_sha256",
   "manifest_sha256",
   "status",
 ]);
-const runningRequest = closed({ ...requestBase, status: { const: "running" } }, [
+const runningRequest: JsonSchema = closed({ ...requestBase, status: { const: "running" } }, [
   "request_id",
   "request_sha256",
   "manifest_sha256",
   "status",
 ]);
-const recoveryRequest = closed({
+const recoveryRequest: JsonSchema = closed({
   ...requestBase,
   status: { const: "recovery_required" },
   recovery: { type: "string", minLength: 1 },
@@ -228,14 +233,17 @@ const recoveryRequest = closed({
   "status",
   "recovery",
 ]);
-const completedRequest = closed({ ...requestBase, status: { const: "completed" }, run }, [
-  "request_id",
-  "request_sha256",
-  "manifest_sha256",
-  "status",
-  "run",
-]);
-const rejectedRequest = closed({
+const completedRequest: JsonSchema = closed(
+  { ...requestBase, status: { const: "completed" }, run },
+  [
+    "request_id",
+    "request_sha256",
+    "manifest_sha256",
+    "status",
+    "run",
+  ],
+);
+const rejectedRequest: JsonSchema = closed({
   ...requestBase,
   status: { const: "rejected" },
   rejection: { const: "manifest_mismatch" },
@@ -247,13 +255,13 @@ const rejectedRequest = closed({
   "rejection",
 ]);
 
-export const simulationManifestOutputSchema = closed({
+export const simulationManifestOutputSchema: JsonSchema = closed({
   schemaVersion: { const: MODELICA_RESUMABLE_RESULTS_SCHEMA_VERSION },
   kind: { const: "simulation-manifest" },
   manifest,
 }, ["schemaVersion", "kind", "manifest"]);
 
-export const simulationRequestOutputSchema = closed({
+export const simulationRequestOutputSchema: JsonSchema = closed({
   schemaVersion: { const: MODELICA_RESUMABLE_RESULTS_SCHEMA_VERSION },
   kind: { const: "simulation-request" },
   request: {

@@ -58,6 +58,21 @@ export async function removeDurable(path: string): Promise<void> {
   await syncDirectory(dirname(path));
 }
 
+/**
+ * Re-establish the durability boundary for a file whose publication may have
+ * reached rename before its parent-directory fsync reported success.
+ */
+export async function confirmDurableFile(path: string): Promise<void> {
+  let file: Deno.FsFile | undefined;
+  try {
+    file = await Deno.open(path, { read: true });
+    await file.sync();
+  } finally {
+    file?.close();
+  }
+  await syncDirectory(dirname(path));
+}
+
 /** Ensure a newly-created run directory itself is discoverable after a crash. */
 export async function makeDurableDirectory(path: string): Promise<void> {
   try {
