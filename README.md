@@ -214,6 +214,9 @@ deno task model-schema:check
 ```
 
 The Docker verification stage runs the non-writing check before its separate real simulation test.
+CI builds and smokes the complete final image once on a native AMD64 runner and once on a native
+ARM64 runner; it does not use QEMU or reuse a Deno cache across architectures. Each final image
+therefore carries `native-omc-smoke-passed`, containing that runner's `uname -m` output.
 
 ### Kit-owned result interpretation
 
@@ -284,5 +287,8 @@ has no Docker socket, no shared CAD-export volume, and no runtime library downlo
 deployments use a published GHCR image digest, never a mutable Docker tag.
 
 Build the image locally and accept it only after `deno task test:omc` executes both shipped kits.
-The Casys fleet and Compose stack pin the resulting image by digest rather than rebuilding it during
-dashboard startup.
+The release workflow is tag-only: it gates the exact tagged JSR archive with `deno task check`,
+`deno task fmt`, `deno task lint`, `deno task test`, and `deno publish --dry-run`; it then builds
+and HTTP-smokes the final image on native AMD64 before distributing it to native AMD64 and ARM64
+GitHub runners. The Casys fleet and Compose stack pin the resulting image by digest rather than
+rebuilding it during dashboard startup.

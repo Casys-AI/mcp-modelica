@@ -35,6 +35,7 @@ ENV OPENMODELICALIBRARY=/opt/modelica-libraries
 ENV MODELICA_RUN_DIR=/runs
 RUN mkdir -p /runs
 
+# Every CI runner builds this full graph natively for its own architecture.
 # Build-time proof: a container image is not valid until its pinned OMC/MSL
 # pair has actually compiled and run both shipped kits. LinearThermalRamp is
 # solver-conformance coverage, not a physical-oracle qualification.
@@ -45,10 +46,10 @@ COPY scripts ./scripts
 RUN deno task model-schema:check
 RUN deno test --allow-read --allow-write --allow-run=perl --allow-env tests/resumable_service_test.ts
 RUN RUN_OMC_INTEGRATION=1 OMC_INTEGRATION_TIMEOUT_MS="${OMC_INTEGRATION_TIMEOUT_MS}" deno task test:omc
-RUN mkdir -p /verification && touch /verification/omc-smoke-passed
+RUN mkdir -p /verification && uname -m > /verification/native-omc-smoke-passed
 
 FROM runtime AS final
-COPY --from=verify /verification/omc-smoke-passed /verification/omc-smoke-passed
+COPY --from=verify /verification/native-omc-smoke-passed /verification/native-omc-smoke-passed
 
 EXPOSE 3016
 ENTRYPOINT ["deno", "run", "--allow-read=/app,/runs", "--allow-write=/runs", "--allow-run=omc,perl", "--allow-env=MODELICA_RUN_DIR,MCP_AUTH_PROVIDER,MCP_AUTH_AUDIENCE,MCP_AUTH_RESOURCE,MCP_AUTH_DOMAIN,MCP_AUTH_ISSUER,MCP_AUTH_JWKS_URI,MCP_AUTH_SCOPES,MCP_AUTH_RESOURCE_METADATA_URL", "--allow-net=0.0.0.0:3016", "server.ts"]
