@@ -1,7 +1,12 @@
 import type { ModelicaKit, ParameterDefinition, SimulationScenario } from "../domain/types.ts";
+import { readKitAsset, registerEmbeddedKitAsset } from "./kit-asset.ts";
+import linearThermalRampModel from "../../models/LinearThermalRamp.mo" with { type: "text" };
+import linearRampNominal from "../../scenarios/linear-ramp-nominal.json" with { type: "text" };
 
 const MODEL_SOURCE = new URL("../../models/LinearThermalRamp.mo", import.meta.url);
 const SCENARIO_SOURCE = new URL("../../scenarios/linear-ramp-nominal.json", import.meta.url);
+registerEmbeddedKitAsset(MODEL_SOURCE, linearThermalRampModel);
+registerEmbeddedKitAsset(SCENARIO_SOURCE, linearRampNominal);
 
 const parameters: readonly ParameterDefinition[] = [
   {
@@ -29,10 +34,12 @@ const parameters: readonly ParameterDefinition[] = [
 ];
 
 export async function loadLinearThermalRampKit(): Promise<ModelicaKit> {
-  const [modelSource, scenarioSource] = await Promise.all([
-    Deno.readTextFile(MODEL_SOURCE),
-    Deno.readTextFile(SCENARIO_SOURCE),
+  const [model, scenarioBytes] = await Promise.all([
+    readKitAsset(MODEL_SOURCE),
+    readKitAsset(SCENARIO_SOURCE),
   ]);
+  const modelSource = model.source;
+  const scenarioSource = scenarioBytes.source;
   return {
     id: "linear-thermal-ramp-v1",
     version: "0.1.0",

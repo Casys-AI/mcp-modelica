@@ -46,7 +46,7 @@ export async function createModelicaServer(
     ((message: string) => console.error(`[mcp-modelica] ${message}`));
   const server = new McpApp({
     name: "mcp-modelica",
-    version: "0.4.0",
+    version: "0.4.1",
     maxConcurrent: 1,
     backpressureStrategy: "queue",
     transport: "stateless",
@@ -181,7 +181,7 @@ function isRemoteViewerUrl(path: string): boolean {
 
 if (import.meta.main) {
   const cli = parseCli(Deno.args);
-  const { server, toolsClient, resumableToolsClient } = await createModelicaServer();
+  const { server } = await createModelicaServer();
   await server.startHttp({
     port: cli.port,
     hostname: cli.hostname,
@@ -192,9 +192,7 @@ if (import.meta.main) {
       );
     },
   });
-  console.error(
-    `[mcp-modelica] Server ready (${toolsClient.count + resumableToolsClient.count} tools).`,
-  );
+  console.error("[mcp-modelica] Server ready.");
 }
 
 interface CliOptions {

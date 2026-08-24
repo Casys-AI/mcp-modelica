@@ -43,7 +43,7 @@ export class ModelicaEvidenceResources {
     // failed publication cannot leave a partial run surface.
     for (const artifact of run.artifacts.filter((item) => !this.server.hasResource(item.uri))) {
       const uri = artifact.uri;
-      await this.service.readRunArtifact(run.run_id, uri);
+      const verified = await this.service.readRunArtifact(run.run_id, uri);
       resources.push({
         uri,
         name: `Modelica ${artifact.kind} (${run.run_id})`,
@@ -51,6 +51,7 @@ export class ModelicaEvidenceResources {
           `Exact canonical UTF-8 ${artifact.kind} artifact for persisted Modelica run ${run.run_id}; ` +
           "read verifies its bytes and SHA-256 against the run ledger.",
         mimeType: mimeTypeForArtifact(uri),
+        size: verified.bytes,
       });
       handlers.set(uri, async (requested) => {
         if (requested.toString() !== uri) {
@@ -68,7 +69,7 @@ export class ModelicaEvidenceResources {
   private async publishKitSource(modelId: string, version: string): Promise<void> {
     const uri = kitSourceUri(modelId, version);
     if (this.server.hasResource(uri)) return;
-    await this.service.readQualifiedModelSource(modelId, version);
+    const identity = await this.service.readQualifiedModelSource(modelId, version);
     this.server.registerResource(
       {
         uri,
@@ -77,6 +78,7 @@ export class ModelicaEvidenceResources {
           "Exact qualified Modelica kit source. Read re-opens the server-owned source and verifies " +
           "its SHA-256 against the loaded kit identity.",
         mimeType: "text/x-modelica",
+        size: identity.bytes,
       },
       async (requested) => {
         if (requested.toString() !== uri) {
@@ -93,7 +95,7 @@ export class ModelicaEvidenceResources {
   private async publishParameterSchema(modelId: string, version: string): Promise<void> {
     const uri = kitParameterSchemaUri(modelId, version);
     if (this.server.hasResource(uri)) return;
-    await this.service.readQualifiedParameterSchema(modelId, version);
+    const schema = await this.service.readQualifiedParameterSchema(modelId, version);
     this.server.registerResource(
       {
         uri,
@@ -102,6 +104,7 @@ export class ModelicaEvidenceResources {
           "Exact compiler-derived parameter schema. Read re-opens its server-owned UTF-8 bytes and " +
           "verifies both the schema identity and the exact qualified Modelica source.",
         mimeType: "application/json",
+        size: schema.bytes,
       },
       async (requested) => {
         if (requested.toString() !== uri) {
@@ -122,7 +125,11 @@ export class ModelicaEvidenceResources {
   ): Promise<void> {
     const uri = kitScenarioUri(modelId, version, scenarioId);
     if (this.server.hasResource(uri)) return;
-    await this.service.readQualifiedScenarioSource(modelId, version, scenarioId);
+    const scenario = await this.service.readQualifiedScenarioSource(
+      modelId,
+      version,
+      scenarioId,
+    );
     this.server.registerResource(
       {
         uri,
@@ -131,6 +138,7 @@ export class ModelicaEvidenceResources {
           `Exact qualified scenario JSON for ${modelId}@${version}. Read re-opens its server-owned ` +
           "UTF-8 bytes and verifies its loaded scenario identity.",
         mimeType: "application/json",
+        size: scenario.bytes,
       },
       async (requested) => {
         if (requested.toString() !== uri) {

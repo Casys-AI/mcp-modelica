@@ -2,9 +2,11 @@ import { join } from "@std/path";
 import { OpenModelicaRunner } from "../api/omc-runner.ts";
 import { createDefaultKitRegistry, KitRegistry } from "../kits/registry.ts";
 import { RunNotFoundError, ValidationError } from "./errors.ts";
-import { sha256, sha256Bytes, stableJson } from "./hashing.ts";
+import { readCanonicalUtf8File, utf8Bytes } from "./canonical-utf8.ts";
+import { sha256, stableJson } from "./hashing.ts";
 import { convertToModelica } from "./units.ts";
 import { parseModelicaParameterSchema } from "../kits/modelica-parameter-schema.ts";
+import { readKitAsset } from "../kits/kit-asset.ts";
 import { CapacityCoordinator } from "../storage/capacity-coordinator.ts";
 import {
   artifactFileName,
@@ -428,7 +430,7 @@ export class ModelicaService {
         `Qualified kit '${modelId}' does not expose a server-owned source resource.`,
       );
     }
-    const { source, digest, bytes } = await readCanonicalUtf8File(kit.modelSourceUrl);
+    const { source, digest, bytes } = await readKitAsset(kit.modelSourceUrl);
     const expectedDigest = await sha256(kit.modelSource);
     if (digest !== expectedDigest) {
       throw new ValidationError(
@@ -465,7 +467,7 @@ export class ModelicaService {
         `Qualified scenario '${scenarioId}' does not expose a server-owned JSON resource.`,
       );
     }
-    const { source, digest, bytes } = await readCanonicalUtf8File(scenario.sourceUrl);
+    const { source, digest, bytes } = await readKitAsset(scenario.sourceUrl);
     if (digest !== await sha256(scenario.source)) {
       throw new ValidationError(
         `Qualified scenario '${scenarioId}' source bytes no longer match its loaded identity.`,
@@ -485,9 +487,7 @@ export class ModelicaService {
         `Qualified kit '${kit.id}' has no server-owned compiler-derived parameter schema resource.`,
       );
     }
-    const { source, digest, bytes } = await readCanonicalUtf8File(
-      kit.parameterSchemaSourceUrl,
-    );
+    const { source, digest, bytes } = await readKitAsset(kit.parameterSchemaSourceUrl);
     if (digest !== await sha256(kit.parameterSchemaSource)) {
       throw new ValidationError(
         `Qualified kit '${kit.id}' compiler-derived parameter schema bytes no longer match its loaded identity.`,
@@ -693,35 +693,6 @@ export class ModelicaService {
     await Deno.writeTextFile(temporaryPath, stableJson(run));
     await Deno.rename(temporaryPath, runPath);
   }
-}
-
-function utf8Bytes(value: string): number {
-  return new TextEncoder().encode(value).byteLength;
-}
-
-const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
-
-async function readCanonicalUtf8File(path: string | URL): Promise<{
-  source: string;
-  bytes: number;
-  digest: string;
-}> {
-  const raw = await Deno.readFile(path);
-  const source = strictUtf8.decode(raw);
-  const reencoded = new TextEncoder().encode(source);
-  if (
-    raw.byteLength !== reencoded.byteLength ||
-    !raw.every((byte, index) => byte === reencoded[index])
-  ) {
-    throw new ValidationError(
-      `Text resource '${path}' is not canonical UTF-8 and cannot be exposed as MCP text.`,
-    );
-  }
-  return {
-    source,
-    bytes: raw.byteLength,
-    digest: await sha256Bytes(raw),
-  };
 }
 
 export async function createModelicaService(

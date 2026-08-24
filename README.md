@@ -1,15 +1,27 @@
 # @casys/mcp-modelica
 
-Safe, reproducible MCP tools for **approved Modelica simulation kits**. The shipped catalogue makes
-two deliberately different claims:
+[![JSR](https://jsr.io/badges/@casys/mcp-modelica)](https://jsr.io/@casys/mcp-modelica)
+[![CI](https://github.com/Casys-AI/mcp-modelica/actions/workflows/check.yml/badge.svg)](https://github.com/Casys-AI/mcp-modelica/actions/workflows/check.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+Run **approved Modelica simulation kits** through a bounded, reproducible MCP surface. The server
+discovers qualified scenarios and parameter domains, runs OpenModelica, persists the exact execution
+evidence, and exposes hashed inputs and outputs for later inspection or replay.
+
+The shipped catalogue makes two deliberately different claims:
 
 - `CoffeeMachine` is a bounded electro-thermal engineering model: boiler/water thermal capacity,
   ambient losses, heater, and thermostat hysteresis.
 - `LinearThermalRamp` is a minimal balanced equation used to prove multi-kit dispatch and real OMC
   solver conformance. It is explicitly not a physical thermal oracle.
 
-This package is not a generic code-execution endpoint. A caller can select a known model and
-scenario, then apply typed, bounded numeric overrides. It can never submit a `.mo` file, a `.mos`
+| Kit id                   | Scenario              | Reviewed overrides | Produced metrics                                                                     |
+| ------------------------ | --------------------- | ------------------ | ------------------------------------------------------------------------------------ |
+| `coffee-machine-v1`      | `heat-up-nominal`     | 8                  | maximum water temperature, optional time to target, heater energy, peak heater power |
+| `linear-thermal-ramp-v1` | `linear-ramp-nominal` | 2                  | final ramp temperature; solver-conformance evidence only                             |
+
+This is not a generic Modelica or code-execution endpoint. A caller can select a known model and
+scenario, then apply typed, bounded numeric overrides. It cannot submit a `.mo` file, a `.mos`
 script, a shell command, or a path.
 
 The MCP endpoint is stateless HTTP only, implementing protocol `2026-07-28`.
@@ -22,12 +34,115 @@ mcp-syson + @casys/constraint-solver → units, margins, pass/fail/unresolved
 
 `succeeded` means that OpenModelica produced a simulation result. It is not a requirement verdict.
 
+## Quick start
+
+### Recommended: run the verified container
+
+Release `0.4.0` is published for Linux AMD64 and ARM64. The digest below is the multi-architecture
+release index and avoids a mutable tag:
+
+```bash
+mkdir -p modelica-runs
+docker run --rm --name mcp-modelica \
+  --publish 127.0.0.1:3016:3016 \
+  --volume "$PWD/modelica-runs:/runs" \
+  ghcr.io/casys-ai/mcp-modelica@sha256:7df4328181db78911bd9a3c4b1d7204f0f7ee01709262a5bc5c111d7c5e45961
+```
+
+This image contains OpenModelica 1.27.0 and Modelica Standard Library 4.1.0. Its build gate compiles
+and runs both shipped kits before the final image is published. The MCP endpoint is
+`http://127.0.0.1:3016/mcp`; the process probe is:
+
+```bash
+curl http://127.0.0.1:3016/health
+```
+
+Point a Streamable HTTP-capable MCP client at the endpoint. The exact config file location depends
+on the host; the connection entry is typically:
+
+```json
+{
+  "mcpServers": {
+    "modelica": {
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:3016/mcp"
+    }
+  }
+}
+```
+
+This release does not implement stdio. A client configuration with `command` and `args` will not
+work; use the HTTP URL.
+
+### Run from JSR
+
+This checkout prepares unpublished package and server metadata `0.4.1`. That is not a JSR release.
+The published JSR package remains `@casys/mcp-modelica@0.4.0`. It reopens kit models, scenarios, and
+compiler-derived schemas as file URLs, so those assets cannot load outside a source checkout.
+
+The `0.4.1` tree binds those same assets as cached text modules. Direct checkout-free JSR use
+becomes supported after `0.4.1` is published, when the host already supplies the pinned OpenModelica
+1.27.0 and Modelica Standard Library 4.1.0 runtime. Until then, run a source checkout or the
+digest-pinned 0.4.0 container.
+
+The digest-pinned 0.4.0 container remains the recommended deployment: it includes that runtime and
+the release-gate proof that both shipped kits compile and run.
+
+### Run a source checkout
+
+For local development, install Deno 2.x, OpenModelica 1.27.0, and MSL 4.1.0, then point OpenModelica
+at the library and keep run evidence in an explicit directory:
+
+```bash
+git clone https://github.com/Casys-AI/mcp-modelica.git
+cd mcp-modelica
+OPENMODELICALIBRARY=/absolute/path/to/Modelica-4.1.0 \
+MODELICA_RUN_DIR="$PWD/runs" \
+  deno task serve
+```
+
+### First useful call
+
+For a new integration, call `modelica_kit_list_recorded` first. It returns the model and scenario
+ids, units, defaults, accepted bounds, produced metrics, and exact evidence resource identities.
+Then call `modelica_simulate_recorded` with only the overrides you need:
+
+```json
+{
+  "model_id": "coffee-machine-v1",
+  "scenario_id": "heat-up-nominal",
+  "parameter_overrides": {
+    "heater_power": { "value": 1500, "unit": "W" },
+    "initial_water_temperature": { "value": 20, "unit": "degC" }
+  },
+  "timeout_ms": 30000
+}
+```
+
+Use the 2.1 manifest/submit/request flow when a caller needs a durable, idempotent request id and
+crash-safe readback. The frozen 1.0 names exist for compatibility; new evidence consumers should
+prefer recorded 2.0 or resumable 2.1 contracts.
+
+## Security boundary
+
+- Callers cannot choose source, scenario files, solver scripts, commands, or paths. The server
+  generates the OMC script from a qualified kit and validated parameters.
+- This is still a solver service. Keep the source server on loopback, or publish the container port
+  only through an authenticated boundary. The bootstrap does not enable HTTP authentication by
+  itself.
+- Mount only the evidence directory at `/runs`; the published image needs no Docker socket, CAD
+  export volume, or runtime Modelica library download.
+- Run capacity and CSV size are bounded, and malformed or changed evidence fails closed, but those
+  controls are not a substitute for host/container isolation.
+
+Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
 ## Tools
 
-The original four names remain frozen at envelope `1.0`; they do not acquire fields conditionally.
-The four recorded successors use envelope `2.0` and expose the richer, resource-addressable ledger.
-The three resumable successors use envelope `2.1`; they are a separate durable request authority and
-do not mutate the eight historical tool contracts or their immutable run ledgers.
+The original names remain frozen at envelope `1.0`; they do not acquire fields conditionally. Their
+recorded successors use envelope `2.0` and expose the richer, resource-addressable ledger. The
+resumable operations use envelope `2.1`; they are a separate durable request authority and do not
+mutate the historical tool contracts or their immutable run ledgers.
 
 | Frozen 1.0 tool     | Recorded 2.0 successor       | Role                                                            |
 | ------------------- | ---------------------------- | --------------------------------------------------------------- |
@@ -37,6 +152,12 @@ do not mutate the eight historical tool contracts or their immutable run ledgers
 | `modelica_run_get`  | `modelica_run_get_recorded`  | Retrieve one immutable persisted record.                        |
 
 ### Resumable 2.1 successor
+
+| Tool                               | Role                                                                  |
+| ---------------------------------- | --------------------------------------------------------------------- |
+| `modelica_simulation_manifest_get` | Re-open the qualified inputs and return the exact manifest identity.  |
+| `modelica_simulation_submit`       | Durably claim and execute one fully explicit, manifest-bound request. |
+| `modelica_simulation_request_get`  | Read or reconcile the request state without starting OpenModelica.    |
 
 `modelica_simulation_manifest_get` re-opens and hashes the exact qualified Modelica source, scenario
 source, optional compiler schema, public scenario projection, parameter bindings/conversions, result
@@ -61,53 +182,60 @@ artifacts, regenerated `run.mos`, resolved parameters, normalized `result.csv`, 
 run.json seal. Normalization code is resolved by the exact sealed normalizer id and version; an
 unavailable or ambiguous implementation fails closed without rewriting the completed claim.
 
-The 2.1 capacity coordinator is shared with both historical simulate tools. A global kernel lock
+The 2.1 capacity coordinator is shared with the historical simulate paths. A global kernel lock
 counts `run_*` directories plus only slot-reserving claims, so incomplete runs and claims remain
 conservative capacity occupants after a crash. All claims, artifacts and ledgers are written,
 synced, atomically renamed, and followed by a directory sync. The process lock uses the explicitly
 installed Perl `flock` helper in the pinned container; it is permitted by the production Deno
 runtime command and exercised in the image verification stage.
 
-Both simulate names persist the same canonical 2.0 run record. The frozen tool projects it back to
-the exact 1.0 output shape: `model.sha256` is the recorded model-source hash, `scenario.sha256` is
-the recorded public-scenario projection hash, and only the seven historical artifact kinds are
-returned. Its fingerprint is recalculated over the exact historical 1.0 identity rather than reusing
-the richer v2 fingerprint. The recorded tool returns the complete 2.0 ledger.
+The frozen and recorded simulate names persist the same canonical 2.0 run record. The frozen tool
+projects it back to the exact 1.0 output shape: `model.sha256` is the recorded model-source hash,
+`scenario.sha256` is the recorded public-scenario projection hash, and only the seven historical
+artifact kinds are returned. Its fingerprint is recalculated over the exact historical 1.0 identity
+rather than reusing the richer v2 fingerprint. The recorded tool returns the complete 2.0 ledger.
 
 Only the recorded catalogue exposes `produced_metrics[].required`. The frozen 1.0 catalogue omits
 that field, preserving its historical output schema exactly; the explicit required/optional contract
 is a 2.0 successor capability.
 
-Example request:
-
-```json
-{
-  "model_id": "coffee-machine-v1",
-  "scenario_id": "heat-up-nominal",
-  "parameter_overrides": {
-    "heater_power": { "value": 1500, "unit": "W" },
-    "initial_water_temperature": { "value": 20, "unit": "degC" }
-  }
-}
-```
-
 The recorded v2 result contains required `started_at` and `completed_at` timestamps, the exact
 Modelica source hash, separate native-scenario and public-projection hashes, an exact
 compiler-derived parameter-schema hash when the kit has one, resolved parameters, artifact hashes,
 and observations. For CoffeeMachine those include `water_temperature_max`,
-`time_to_target_temperature`, and `heater_energy`. If a target is not reached, the optional time
-metric is absent rather than invented; the requirement evaluator can therefore return `unresolved`
-or `fail` from a real rule.
+`time_to_target_temperature`, `heater_energy`, and `heater_power_peak`. If a target is not reached,
+the optional time metric is absent rather than invented; a separate requirement evaluator can then
+return `unresolved` or `fail` from a real rule.
+
+## Model, run, resource, and digest semantics
+
+- Qualified model, scenario, and optional compiler-schema resources are server-owned.
+  `resources/read` reopens the exact UTF-8 bytes and verifies their byte length and SHA-256 before
+  returning them; callers cannot supply a path or arbitrary URI.
+- A simulation copies its qualified inputs and generated artifacts under `MODELICA_RUN_DIR` (default
+  `./runs`) before publishing an immutable `run.json`. Recorded runs name exact request,
+  resolved-parameter, model, scenario, schema, generated `.mos`, diagnostics, CSV result, and
+  evidence artifacts as applicable.
+- An artifact `sha256` identifies exact bytes. The run `fingerprint` identifies the normalized
+  execution contract: kit/scenario identity, resolved parameters, engine, and normalizer. Neither is
+  a requirement verdict.
+- Recorded 2.0 keeps native scenario bytes and the public scenario projection as different hashes.
+  Resumable 2.1 additionally seals the current OMC/MSL engine, unit conversions, lowering, and
+  result-normalizer identities in `manifest_sha256` before submission.
+- A final resource read rechecks the persisted ledger and bytes. A missing, changed, or noncanonical
+  artifact fails closed; reads never rewrite evidence or rerun OpenModelica.
+- The store retains at most 20 runs and accepts at most 5 MiB for a result CSV. Capacity exhaustion
+  refuses a new run; the server does not silently evict old evidence and exposes no delete tool.
 
 ## Results viewer contract
 
-Both simulate/get pairs expose `ui://mcp-modelica/results-viewer`. Both list tools use the separate
-`ui://mcp-modelica/run-list-viewer` resource so a discovery list never advertises detail-only
-evidence facets. They retain a concise text fallback and expose persisted data as
+The simulate/get operations expose `ui://mcp-modelica/results-viewer`. The list operations use the
+separate `ui://mcp-modelica/run-list-viewer` resource so a discovery list never advertises
+detail-only evidence facets. They retain a concise text fallback and expose persisted data as
 `structuredContent` with one of two fixed contracts:
 
-- the four historical names return only envelope `1.0` and its legacy run/summary shapes;
-- the four `_recorded` names return only envelope `2.0` and the recorded run/summary shapes.
+- the frozen names return only envelope `1.0` and its legacy run/summary shapes;
+- the `_recorded` names return only envelope `2.0` and the recorded run/summary shapes.
 
 Version 2 is an explicit successor rather than a mutation of the former envelope. It names
 `model.source_sha256`, `scenario.source_sha256`, and `scenario.projection_sha256` separately, and
@@ -141,17 +269,17 @@ sandboxed App. A failed or timed-out run likewise never invents a temperature va
 
 Run storage is deliberately bounded: at most 20 retained runs and 5 MiB per CSV result. The server
 refuses a new run when evidence storage is full; it never silently deletes prior proof or lets an
-agent fill the host disk. `modelica_run_list` is read-only and accepts an optional `limit` from 1 to
-20; it lists final persisted summaries lexicographically by `run_id`, not by mutable filesystem
-timestamps. The shared volume is strict bi-read: canonical 0.2.x v1 ledgers pass through the frozen
-list/get contract unchanged, while canonical v2 ledgers are projected there. The recorded list
-excludes v1 and recorded get refuses it explicitly. No read rewrites either ledger generation.
-Malformed or noncanonical final `run.json` files fail closed before either index or the resource
-bootstrap is published.
+agent bypass the admitted run limit. `modelica_run_list` is read-only and accepts an optional
+`limit` from 1 to 20; it lists final persisted summaries lexicographically by `run_id`, not by
+mutable filesystem timestamps. The shared volume is strict bi-read: canonical 0.2.x v1 ledgers pass
+through the frozen list/get contract unchanged, while canonical v2 ledgers are projected there. The
+recorded list excludes v1 and recorded get refuses it explicitly. No read rewrites either ledger
+generation. Malformed or noncanonical final `run.json` files fail closed before either index or the
+resource bootstrap is published.
 
 ## Development
 
-Version 0.4.0 is HTTP stateless-only. It does not reintroduce the former stdio/session transport
+Version 0.4.1 is HTTP stateless-only. It does not reintroduce the former stdio/session transport
 surface or carry a transport compatibility mode.
 
 ```bash
@@ -290,5 +418,17 @@ Build the image locally and accept it only after `deno task test:omc` executes b
 The release workflow is tag-only: it gates the exact tagged JSR archive with `deno task check`,
 `deno task fmt`, `deno task lint`, `deno task test`, and `deno publish --dry-run`; it then builds
 and HTTP-smokes the final image on native AMD64 before distributing it to native AMD64 and ARM64
-GitHub runners. The Casys fleet and Compose stack pin the resulting image by digest rather than
-rebuilding it during dashboard startup.
+GitHub runners. The published image is a standalone deployment option; pin it by digest in any
+deployment that uses it.
+
+## Relationship to `casys-digital-thread`
+
+This repository remains a useful standalone MCP server for approved-kit discovery, bounded
+OpenModelica execution, durable evidence, and integrations that want an HTTP solver sidecar.
+
+It is not the current product execution path inside `casys-digital-thread`. There, admitted Modelica
+source is reopened and executed locally in a microVM by `compile.seal-admission@2` plus
+`simulate.run-admitted-modelica@1`; the pinned-kit operation `simulate.run-qualified-modelica-kit@1`
+is also a local microVM path. The Compose sidecar described by this repository's Docker packaging
+must not be treated as a substitute for either registered product operation or as evidence of the
+currently running Digital Thread topology.

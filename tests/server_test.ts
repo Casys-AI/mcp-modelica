@@ -5,7 +5,12 @@ import { createModelicaServer, createResultsViewerFileSystem } from "../server.t
 import { createModelicaService } from "../src/domain/service.ts";
 import { ValidationError } from "../src/domain/errors.ts";
 import { stableJson } from "../src/domain/hashing.ts";
-import { ModelicaEvidenceResources } from "../src/resources/modelica-evidence-resources.ts";
+import {
+  kitParameterSchemaUri,
+  kitScenarioUri,
+  kitSourceUri,
+  ModelicaEvidenceResources,
+} from "../src/resources/modelica-evidence-resources.ts";
 import { FakeRunner, installLegacyRunFixture, LEGACY_RUN_ID } from "./test-helpers.ts";
 
 Deno.test("MCP App resource registration is skipped until the viewer build exists", async () => {
@@ -103,11 +108,11 @@ Deno.test("built Modelica results viewer is registered as the MCP App resource",
 
 Deno.test("MCP App viewer resolves the exact published JSR dist URL", async () => {
   const directory = await Deno.makeTempDir({ prefix: "mcp-modelica-server-" });
-  const moduleUrl = "https://jsr.io/@casys/mcp-modelica/0.4.0/server.ts";
+  const moduleUrl = "https://jsr.io/@casys/mcp-modelica/0.4.1/server.ts";
   const expectedResultsViewerUrl =
-    "https://jsr.io/@casys/mcp-modelica/0.4.0/src/ui/dist/results-viewer/index.html";
+    "https://jsr.io/@casys/mcp-modelica/0.4.1/src/ui/dist/results-viewer/index.html";
   const expectedRunListViewerUrl =
-    "https://jsr.io/@casys/mcp-modelica/0.4.0/src/ui/dist/run-list-viewer/index.html";
+    "https://jsr.io/@casys/mcp-modelica/0.4.1/src/ui/dist/run-list-viewer/index.html";
   try {
     const service = await createModelicaService({
       runsDirectory: directory,
@@ -178,6 +183,11 @@ Deno.test("HTTP MCP wire exposes result viewer metadata and structured simulatio
     });
     const http = await server.startHttp({ port, hostname: "127.0.0.1", onListen: () => {} });
     try {
+      const discovered = await rpc(port, "server/discover", {});
+      assertEquals(discovered.result.serverInfo, {
+        name: "mcp-modelica",
+        version: "0.4.1",
+      });
       const listed = await rpc(port, "tools/list", {});
       const tools = listed.result.tools as Array<Record<string, unknown>>;
       assertEquals(tools.map((tool) => tool.name).sort(), [
@@ -377,6 +387,54 @@ Deno.test("HTTP MCP wire exposes result viewer metadata and structured simulatio
   }
 });
 
+Deno.test("qualified kit and historical run resources attest the verified byte size", async () => {
+  const directory = await Deno.makeTempDir({ prefix: "mcp-modelica-resource-size-" });
+  try {
+    const service = await createModelicaService({
+      runsDirectory: directory,
+      runner: new FakeRunner(),
+    });
+    const { server, evidenceResources } = await createModelicaServer({
+      service,
+      logger: () => {},
+      viewerFileSystem: { exists: () => false, readFile: () => "unreachable" },
+    });
+    const model = await service.readQualifiedModelSource("coffee-machine-v1", "0.1.0");
+    const scenario = await service.readQualifiedScenarioSource(
+      "coffee-machine-v1",
+      "0.1.0",
+      "heat-up-nominal",
+    );
+    const schema = await service.readQualifiedParameterSchema("coffee-machine-v1", "0.1.0");
+    assertEquals(
+      server.getResourceInfo(kitSourceUri("coffee-machine-v1", "0.1.0"))?.size,
+      model.bytes,
+    );
+    assertEquals(
+      server.getResourceInfo(kitScenarioUri("coffee-machine-v1", "0.1.0", "heat-up-nominal"))
+        ?.size,
+      scenario.bytes,
+    );
+    assertEquals(
+      server.getResourceInfo(kitParameterSchemaUri("coffee-machine-v1", "0.1.0"))?.size,
+      schema.bytes,
+    );
+
+    const run = await service.simulate({
+      model_id: "coffee-machine-v1",
+      scenario_id: "heat-up-nominal",
+    });
+    await evidenceResources.publishRun(run);
+    for (const artifact of run.artifacts) {
+      const verified = await service.readRunArtifact(run.run_id, artifact.uri);
+      assertEquals(verified.bytes, artifact.bytes);
+      assertEquals(server.getResourceInfo(artifact.uri)?.size, verified.bytes);
+    }
+  } finally {
+    await Deno.remove(directory, { recursive: true });
+  }
+});
+
 Deno.test("HTTP MCP wire lists and reads only identity-bound Modelica sources and run artifacts", async () => {
   const directory = await Deno.makeTempDir({ prefix: "mcp-modelica-resource-wire-" });
   const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
@@ -402,6 +460,11 @@ Deno.test("HTTP MCP wire lists and reads only identity-bound Modelica sources an
       const schemaUri = "casys://modelica/kits/coffee-machine-v1/0.1.0/parameter-schema.json";
       const source = initialResources.find((resource) => resource.uri === sourceUri);
       assertEquals(source?.mimeType, "text/x-modelica");
+      const sourceRead = await rpc(port, "resources/read", { uri: sourceUri });
+      const sourceText = (sourceRead.result.contents as Array<Record<string, unknown>>)[0].text;
+      assertEquals(typeof sourceText, "string");
+      assertEquals((sourceText as string).includes("model CoffeeMachine"), true);
+      assertEquals(source?.size, new TextEncoder().encode(sourceText as string).byteLength);
       assertEquals(
         initialResources.find((resource) => resource.uri === scenarioUri)?.mimeType,
         "application/json",
@@ -415,21 +478,21 @@ Deno.test("HTTP MCP wire lists and reads only identity-bound Modelica sources an
         false,
       );
 
-      const sourceRead = await rpc(port, "resources/read", { uri: sourceUri });
-      const sourceText = (sourceRead.result.contents as Array<Record<string, unknown>>)[0].text;
-      assertEquals(typeof sourceText, "string");
-      assertEquals((sourceText as string).includes("model CoffeeMachine"), true);
       const scenarioRead = await rpc(port, "resources/read", { uri: scenarioUri });
+      const scenarioText = (scenarioRead.result.contents as Array<Record<string, unknown>>)[0]
+        .text as string;
+      assertEquals(scenarioText.includes("heat-up-nominal"), true);
       assertEquals(
-        ((scenarioRead.result.contents as Array<Record<string, unknown>>)[0].text as string)
-          .includes("heat-up-nominal"),
-        true,
+        initialResources.find((resource) => resource.uri === scenarioUri)?.size,
+        new TextEncoder().encode(scenarioText).byteLength,
       );
       const schemaRead = await rpc(port, "resources/read", { uri: schemaUri });
+      const schemaText = (schemaRead.result.contents as Array<Record<string, unknown>>)[0]
+        .text as string;
+      assertEquals(schemaText.includes("getModelInstance"), true);
       assertEquals(
-        ((schemaRead.result.contents as Array<Record<string, unknown>>)[0].text as string)
-          .includes("getModelInstance"),
-        true,
+        initialResources.find((resource) => resource.uri === schemaUri)?.size,
+        new TextEncoder().encode(schemaText).byteLength,
       );
 
       const simulated = await rpc(port, "tools/call", {
@@ -460,6 +523,10 @@ Deno.test("HTTP MCP wire lists and reads only identity-bound Modelica sources an
       const resultCsv = (resultRead.result.contents as Array<Record<string, unknown>>)[0];
       assertEquals(resultCsv.mimeType, "text/csv");
       assertEquals((resultCsv.text as string).includes("time"), true);
+      assertEquals(
+        afterResources.find((resource) => resource.uri === resultArtifact.uri)?.size,
+        new TextEncoder().encode(resultCsv.text as string).byteLength,
+      );
       const runSchema = await rpc(port, "resources/read", { uri: parameterSchemaArtifact.uri });
       assertEquals(
         ((runSchema.result.contents as Array<Record<string, unknown>>)[0].text as string)
@@ -749,6 +816,7 @@ Deno.test("legacy startup publishes only resources attested by the frozen v1 led
     const runPrefix = `casys://modelica/runs/${LEGACY_RUN_ID}/`;
     for (const artifact of fixture.run.artifacts) {
       assertEquals(server.hasResource(artifact.uri), true);
+      assertEquals(server.getResourceInfo(artifact.uri)?.size, artifact.bytes);
     }
     assertEquals(server.hasResource(`${runPrefix}scenario.json`), false);
     assertEquals(server.hasResource(`${runPrefix}parameter-schema.json`), false);
@@ -801,7 +869,12 @@ const CLIENT_CAPABILITIES_KEY = "io.modelcontextprotocol/clientCapabilities";
 
 async function rpc(
   port: number,
-  method: "tools/list" | "tools/call" | "resources/list" | "resources/read",
+  method:
+    | "server/discover"
+    | "tools/list"
+    | "tools/call"
+    | "resources/list"
+    | "resources/read",
   params: Record<string, unknown>,
 ): Promise<{ result: Record<string, unknown> }> {
   const name = typeof params.name === "string"

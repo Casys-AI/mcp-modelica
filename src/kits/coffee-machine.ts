@@ -5,6 +5,12 @@ import {
   type IntentionallyUnqualifiedParameter,
   parseModelicaParameterSchema,
 } from "./modelica-parameter-schema.ts";
+import { readKitAsset, registerEmbeddedKitAsset } from "./kit-asset.ts";
+import coffeeMachineModel from "../../models/CoffeeMachine.mo" with { type: "text" };
+import coffeeMachineParameterSchema from "../../models/CoffeeMachine.parameters.json" with {
+  type: "text",
+};
+import heatUpNominal from "../../scenarios/heat-up-nominal.json" with { type: "text" };
 
 const MODEL_SOURCE = new URL("../../models/CoffeeMachine.mo", import.meta.url);
 const PARAMETER_SCHEMA_SOURCE = new URL(
@@ -12,6 +18,9 @@ const PARAMETER_SCHEMA_SOURCE = new URL(
   import.meta.url,
 );
 const SCENARIO_SOURCE = new URL("../../scenarios/heat-up-nominal.json", import.meta.url);
+registerEmbeddedKitAsset(MODEL_SOURCE, coffeeMachineModel);
+registerEmbeddedKitAsset(PARAMETER_SCHEMA_SOURCE, coffeeMachineParameterSchema);
+registerEmbeddedKitAsset(SCENARIO_SOURCE, heatUpNominal);
 
 // These remain qualification decisions: public ids, narrative, valid ranges
 // and the explicitly declared exposure conversion do not follow from Modelica.
@@ -122,11 +131,14 @@ const intentionallyUnqualified: readonly IntentionallyUnqualifiedParameter[] = [
 ];
 
 export async function loadCoffeeMachineKit(): Promise<ModelicaKit> {
-  const [modelSource, parameterSchemaSource, scenarioSource] = await Promise.all([
-    Deno.readTextFile(MODEL_SOURCE),
-    Deno.readTextFile(PARAMETER_SCHEMA_SOURCE),
-    Deno.readTextFile(SCENARIO_SOURCE),
+  const [model, parameterSchema, scenarioBytes] = await Promise.all([
+    readKitAsset(MODEL_SOURCE),
+    readKitAsset(PARAMETER_SCHEMA_SOURCE),
+    readKitAsset(SCENARIO_SOURCE),
   ]);
+  const modelSource = model.source;
+  const parameterSchemaSource = parameterSchema.source;
+  const scenarioSource = scenarioBytes.source;
   await assertModelicaParameterAgreement({
     modelName: "CoffeeMachine",
     modelSource,

@@ -9,7 +9,7 @@ export interface ResumableSimulationToolsClientHooks {
   onProjectionError?: (error: unknown, requestId: string) => void;
 }
 
-/** Separate client keeps the frozen eight-tool 1.0/2.0 adapter byte-stable. */
+/** Separate client keeps the frozen legacy 1.0/2.0 adapter byte-stable. */
 export class ResumableSimulationToolsClient {
   private readonly tools: readonly ModelicaTool[];
 
