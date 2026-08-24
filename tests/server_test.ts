@@ -108,11 +108,11 @@ Deno.test("built Modelica results viewer is registered as the MCP App resource",
 
 Deno.test("MCP App viewer resolves the exact published JSR dist URL", async () => {
   const directory = await Deno.makeTempDir({ prefix: "mcp-modelica-server-" });
-  const moduleUrl = "https://jsr.io/@casys/mcp-modelica/0.4.1/server.ts";
+  const moduleUrl = "https://jsr.io/@casys/mcp-modelica/0.4.2/server.ts";
   const expectedResultsViewerUrl =
-    "https://jsr.io/@casys/mcp-modelica/0.4.1/src/ui/dist/results-viewer/index.html";
+    "https://jsr.io/@casys/mcp-modelica/0.4.2/src/ui/dist/results-viewer/index.html";
   const expectedRunListViewerUrl =
-    "https://jsr.io/@casys/mcp-modelica/0.4.1/src/ui/dist/run-list-viewer/index.html";
+    "https://jsr.io/@casys/mcp-modelica/0.4.2/src/ui/dist/run-list-viewer/index.html";
   try {
     const service = await createModelicaService({
       runsDirectory: directory,
@@ -186,7 +186,7 @@ Deno.test("HTTP MCP wire exposes result viewer metadata and structured simulatio
       const discovered = await rpc(port, "server/discover", {});
       assertEquals(discovered.result.serverInfo, {
         name: "mcp-modelica",
-        version: "0.4.1",
+        version: "0.4.2",
       });
       const listed = await rpc(port, "tools/list", {});
       const tools = listed.result.tools as Array<Record<string, unknown>>;

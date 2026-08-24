@@ -76,14 +76,19 @@ work; use the HTTP URL.
 
 ### Run from JSR
 
-This checkout prepares unpublished package and server metadata `0.4.1`. That is not a JSR release.
+This checkout prepares unpublished package and server metadata `0.4.2`. That is not a JSR release.
+Do not treat an unpublished `0.4.2` JSR URL as usable.
+
+`v0.4.1` is tagged in git, but it was not published on JSR: the registry rejected the `0.4.1` module
+graph because import attributes with `type: "text"` are unsupported.
+
 The published JSR package remains `@casys/mcp-modelica@0.4.0`. It reopens kit models, scenarios, and
 compiler-derived schemas as file URLs, so those assets cannot load outside a source checkout.
 
-The `0.4.1` tree binds those same assets as cached text modules. Direct checkout-free JSR use
-becomes supported after `0.4.1` is published, when the host already supplies the pinned OpenModelica
-1.27.0 and Modelica Standard Library 4.1.0 runtime. Until then, run a source checkout or the
-digest-pinned 0.4.0 container.
+The `0.4.2` tree binds those same assets as ordinary generated TypeScript modules. Direct
+checkout-free JSR use becomes supported after `0.4.2` is published, when the host already supplies
+the pinned OpenModelica 1.27.0 and Modelica Standard Library 4.1.0 runtime. Until then, run a source
+checkout or the digest-pinned 0.4.0 container.
 
 The digest-pinned 0.4.0 container remains the recommended deployment: it includes that runtime and
 the release-gate proof that both shipped kits compile and run.
@@ -279,7 +284,7 @@ resource bootstrap is published.
 
 ## Development
 
-Version 0.4.1 is HTTP stateless-only. It does not reintroduce the former stdio/session transport
+Version 0.4.2 is HTTP stateless-only. It does not reintroduce the former stdio/session transport
 surface or carry a transport compatibility mode.
 
 ```bash
@@ -288,6 +293,8 @@ deno task fmt
 deno task lint
 deno task test
 ```
+
+`deno task check` includes the kit-asset drift check (`deno task kit-assets:check`).
 
 ### Results viewer build
 
@@ -345,6 +352,19 @@ The Docker verification stage runs the non-writing check before its separate rea
 CI builds and smokes the complete final image once on a native AMD64 runner and once on a native
 ARM64 runner; it does not use QEMU or reuse a Deno cache across architectures. Each final image
 therefore carries `native-omc-smoke-passed`, containing that runner's `uname -m` output.
+
+### Qualified kit asset bindings
+
+The five qualified kit files are embedded as ordinary TypeScript string literals in
+`src/kits/generated-kit-assets.ts`. The generator reads raw bytes, rejects noncanonical UTF-8, and
+emits deterministic TypeScript. In a source checkout, file-URL reads still reopen those assets from
+disk. For `http` or `https` package module URLs, only the generated bindings are used: there is no
+network fetch and no checkout-path fallback.
+
+```bash
+deno task kit-assets:generate
+deno task kit-assets:check
+```
 
 ### Kit-owned result interpretation
 

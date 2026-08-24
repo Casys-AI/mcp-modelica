@@ -6,11 +6,7 @@ import {
   parseModelicaParameterSchema,
 } from "./modelica-parameter-schema.ts";
 import { readKitAsset, registerEmbeddedKitAsset } from "./kit-asset.ts";
-import coffeeMachineModel from "../../models/CoffeeMachine.mo" with { type: "text" };
-import coffeeMachineParameterSchema from "../../models/CoffeeMachine.parameters.json" with {
-  type: "text",
-};
-import heatUpNominal from "../../scenarios/heat-up-nominal.json" with { type: "text" };
+import { generatedKitAssetText } from "./generated-kit-assets.ts";
 
 const MODEL_SOURCE = new URL("../../models/CoffeeMachine.mo", import.meta.url);
 const PARAMETER_SCHEMA_SOURCE = new URL(
@@ -18,9 +14,12 @@ const PARAMETER_SCHEMA_SOURCE = new URL(
   import.meta.url,
 );
 const SCENARIO_SOURCE = new URL("../../scenarios/heat-up-nominal.json", import.meta.url);
-registerEmbeddedKitAsset(MODEL_SOURCE, coffeeMachineModel);
-registerEmbeddedKitAsset(PARAMETER_SCHEMA_SOURCE, coffeeMachineParameterSchema);
-registerEmbeddedKitAsset(SCENARIO_SOURCE, heatUpNominal);
+registerEmbeddedKitAsset(MODEL_SOURCE, generatedKitAssetText["models/CoffeeMachine.mo"]);
+registerEmbeddedKitAsset(
+  PARAMETER_SCHEMA_SOURCE,
+  generatedKitAssetText["models/CoffeeMachine.parameters.json"],
+);
+registerEmbeddedKitAsset(SCENARIO_SOURCE, generatedKitAssetText["scenarios/heat-up-nominal.json"]);
 
 // These remain qualification decisions: public ids, narrative, valid ranges
 // and the explicitly declared exposure conversion do not follow from Modelica.

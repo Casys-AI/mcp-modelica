@@ -45,6 +45,33 @@ Deno.test("unregistered https kit assets fail closed without network fetch", asy
   );
 });
 
+Deno.test("http kit assets never fall back to a checkout path when a decoy file exists", async () => {
+  const directory = await Deno.makeTempDir({ prefix: "mcp-modelica-kit-checkout-decoy-" });
+  const originalCwd = Deno.cwd();
+  try {
+    await Deno.mkdir(join(directory, "models"), { recursive: true });
+    await Deno.writeTextFile(join(directory, "models", "CoffeeMachine.mo"), "checkout decoy\n");
+    Deno.chdir(directory);
+    await assertRejects(
+      () => readKitAsset(new URL("http://127.0.0.1:1/models/CoffeeMachine.mo")),
+      ValidationError,
+      "refusing network fetch and checkout fallback",
+    );
+  } finally {
+    Deno.chdir(originalCwd);
+    await Deno.remove(directory, { recursive: true });
+  }
+});
+
+Deno.test("qualified kit TypeScript in the publish graph has no text import attributes", async () => {
+  const hits = [
+    ...await collectTextImportHits(new URL("../mod.ts", import.meta.url)),
+    ...await collectTextImportHits(new URL("../server.ts", import.meta.url)),
+    ...await collectTextImportHits(new URL("../src/", import.meta.url)),
+  ];
+  assertEquals(hits, []);
+});
+
 Deno.test("file-backed kit assets are reopened from raw bytes and detect mutation after load", async () => {
   const directory = await Deno.makeTempDir({ prefix: "mcp-modelica-kit-file-mutation-" });
   try {
@@ -112,6 +139,7 @@ Deno.test("package-style HTTP kit loading works away from the checkout and under
   const expected = await localPublishedIdentities();
   const denoDir = await Deno.makeTempDir({ prefix: "mcp-modelica-kit-deno-dir-" });
   const emptyCwd = await Deno.makeTempDir({ prefix: "mcp-modelica-kit-empty-cwd-" });
+  await installCheckoutDecoys(emptyCwd);
   const server = startRepositoryModuleServer(repositoryRoot);
   try {
     const primed = await runPublishedKitLoader({
@@ -174,8 +202,19 @@ async function localPublishedIdentities(): Promise<PublishedIdentities> {
       new URL("../scenarios/linear-ramp-nominal.json", import.meta.url),
     ),
   };
+  const coffeeScenario = coffee.scenarios[0];
+  const rampScenario = ramp.scenarios[0];
+  if (
+    coffee.parameterSchemaSource === undefined || coffeeScenario.source === undefined ||
+    rampScenario.source === undefined
+  ) {
+    throw new Error("Qualified kits are missing server-owned asset bytes.");
+  }
   assertEquals(new TextEncoder().encode(coffee.modelSource), files.coffeeModel);
+  assertEquals(new TextEncoder().encode(coffee.parameterSchemaSource), files.coffeeSchema);
+  assertEquals(new TextEncoder().encode(coffeeScenario.source), files.coffeeScenario);
   assertEquals(new TextEncoder().encode(ramp.modelSource), files.rampModel);
+  assertEquals(new TextEncoder().encode(rampScenario.source), files.rampScenario);
   return {
     coffee: {
       id: coffee.id,
@@ -244,6 +283,45 @@ async function runPublishedKitLoader(input: {
     );
   }
   return JSON.parse(new TextDecoder().decode(output.stdout)) as PublishedIdentities;
+}
+
+async function installCheckoutDecoys(cwd: string): Promise<void> {
+  const decoys: Record<string, string> = {
+    "models/CoffeeMachine.mo": "checkout decoy model\n",
+    "models/CoffeeMachine.parameters.json": '{"checkout":"decoy"}\n',
+    "models/LinearThermalRamp.mo": "checkout decoy ramp\n",
+    "scenarios/heat-up-nominal.json": '{"checkout":"decoy"}\n',
+    "scenarios/linear-ramp-nominal.json": '{"checkout":"decoy"}\n',
+  };
+  for (const [relativePath, source] of Object.entries(decoys)) {
+    const path = join(cwd, relativePath);
+    await Deno.mkdir(dirname(path), { recursive: true });
+    await Deno.writeTextFile(path, source);
+  }
+}
+
+function hasTextImportAttribute(source: string): boolean {
+  return /from\s+["'][^"']+["']\s+with\s*\{[\s\S]*?type:\s*["']text["']/.test(source);
+}
+
+async function collectTextImportHits(root: URL): Promise<string[]> {
+  const hits: string[] = [];
+  const info = await Deno.stat(root);
+  if (info.isFile) {
+    if (hasTextImportAttribute(await Deno.readTextFile(root))) hits.push(root.pathname);
+    return hits;
+  }
+  for await (const entry of Deno.readDir(root)) {
+    if (entry.name === "dist" || entry.name.endsWith("_test.ts")) continue;
+    const child = new URL(entry.name + (entry.isDirectory ? "/" : ""), root);
+    if (entry.isDirectory) {
+      hits.push(...await collectTextImportHits(child));
+      continue;
+    }
+    if (!entry.name.endsWith(".ts")) continue;
+    if (hasTextImportAttribute(await Deno.readTextFile(child))) hits.push(child.pathname);
+  }
+  return hits;
 }
 
 function startRepositoryModuleServer(root: string): {

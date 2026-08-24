@@ -4,9 +4,9 @@ import { ValidationError } from "../domain/errors.ts";
 const embeddedKitAssets = new Map<string, string>();
 
 /**
- * Bind a statically imported kit asset to the URL Deno would assign it in the
- * module graph. File-backed reads still reopen raw bytes; https/http reads use
- * only this cached binding.
+ * Bind a statically imported generated TypeScript kit asset to the URL Deno
+ * would assign it in the module graph. File-backed reads still reopen raw
+ * bytes; https/http reads use only this cached binding.
  */
 export function registerEmbeddedKitAsset(url: URL, text: string): void {
   const existing = embeddedKitAssets.get(url.href);
@@ -23,8 +23,8 @@ export function registerEmbeddedKitAsset(url: URL, text: string): void {
  *
  * Local file URLs are read from disk on every call so a mutation after registry
  * creation fails closed. https/http JSR-style module URLs reopen only from the
- * statically imported text already in the module graph. There is no fetch and
- * no checkout-path fallback.
+ * statically imported generated TypeScript already in the module graph. There
+ * is no fetch and no checkout-path fallback.
  */
 export async function readKitAsset(url: URL): Promise<{
   source: string;

@@ -1,6 +1,6 @@
 {
   "name": "@casys/mcp-modelica",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
@@ -36,7 +36,9 @@
     "test:omc": "RUN_OMC_INTEGRATION=1 deno test --allow-read --allow-write --allow-run --allow-env tests/omc_integration_test.ts",
     "model-schema:generate": "deno run --allow-read=models --allow-write=models --allow-run=omc scripts/derive-modelica-parameter-schema.ts",
     "model-schema:check": "deno run --allow-read=models --allow-run=omc scripts/derive-modelica-parameter-schema.ts --check",
-    "check": "deno check mod.ts server.ts scripts/derive-modelica-parameter-schema.ts",
+    "kit-assets:generate": "deno run --allow-read=models,scenarios --allow-write=src/kits/generated-kit-assets.ts scripts/generate-kit-assets.ts",
+    "kit-assets:check": "deno run --allow-read=models,scenarios,src/kits/generated-kit-assets.ts scripts/generate-kit-assets.ts --check",
+    "check": "deno task kit-assets:check && deno check mod.ts server.ts scripts/derive-modelica-parameter-schema.ts scripts/generate-kit-assets.ts",
     "fmt": "deno fmt --check deno.json mod.ts server.ts src tests scripts models/CoffeeMachine.parameters.json",
     "lint": "deno lint mod.ts server.ts src tests scripts"
   },
@@ -46,7 +48,7 @@
     "@std/path": "jsr:@std/path@^1.1.0"
   },
   "fmt": {
-    "exclude": ["src/ui/dist"],
+    "exclude": ["src/ui/dist", "src/kits/generated-kit-assets.ts"],
     "lineWidth": 100,
     "semiColons": true,
     "singleQuote": false

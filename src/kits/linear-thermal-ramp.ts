@@ -1,12 +1,14 @@
 import type { ModelicaKit, ParameterDefinition, SimulationScenario } from "../domain/types.ts";
 import { readKitAsset, registerEmbeddedKitAsset } from "./kit-asset.ts";
-import linearThermalRampModel from "../../models/LinearThermalRamp.mo" with { type: "text" };
-import linearRampNominal from "../../scenarios/linear-ramp-nominal.json" with { type: "text" };
+import { generatedKitAssetText } from "./generated-kit-assets.ts";
 
 const MODEL_SOURCE = new URL("../../models/LinearThermalRamp.mo", import.meta.url);
 const SCENARIO_SOURCE = new URL("../../scenarios/linear-ramp-nominal.json", import.meta.url);
-registerEmbeddedKitAsset(MODEL_SOURCE, linearThermalRampModel);
-registerEmbeddedKitAsset(SCENARIO_SOURCE, linearRampNominal);
+registerEmbeddedKitAsset(MODEL_SOURCE, generatedKitAssetText["models/LinearThermalRamp.mo"]);
+registerEmbeddedKitAsset(
+  SCENARIO_SOURCE,
+  generatedKitAssetText["scenarios/linear-ramp-nominal.json"],
+);
 
 const parameters: readonly ParameterDefinition[] = [
   {
