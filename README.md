@@ -38,15 +38,16 @@ mcp-syson + @casys/constraint-solver → units, margins, pass/fail/unresolved
 
 ### Recommended: run the verified container
 
-Release `0.4.0` is published for Linux AMD64 and ARM64. The digest below is the multi-architecture
-release index and avoids a mutable tag:
+Release `0.4.2` is the current signed multi-architecture image for Linux AMD64 and ARM64. The digest
+below is the release index and avoids a mutable tag. Both architecture labels name revision
+`5c8484728dc6e1bdb1b84f62bb99449c414807bb` and version `0.4.2`:
 
 ```bash
 mkdir -p modelica-runs
 docker run --rm --name mcp-modelica \
   --publish 127.0.0.1:3016:3016 \
   --volume "$PWD/modelica-runs:/runs" \
-  ghcr.io/casys-ai/mcp-modelica@sha256:7df4328181db78911bd9a3c4b1d7204f0f7ee01709262a5bc5c111d7c5e45961
+  ghcr.io/casys-ai/mcp-modelica@sha256:378ed2f51533306f948ef6cfa1224b0466b720eefac3162c0653478d81023ccd
 ```
 
 This image contains OpenModelica 1.27.0 and Modelica Standard Library 4.1.0. Its build gate compiles
@@ -76,22 +77,23 @@ work; use the HTTP URL.
 
 ### Run from JSR
 
-This checkout prepares unpublished package and server metadata `0.4.2`. That is not a JSR release.
-Do not treat an unpublished `0.4.2` JSR URL as usable.
+The current JSR package is `@casys/mcp-modelica@0.4.2`. It binds kit models, scenarios, and
+compiler-derived schemas as ordinary generated TypeScript modules, so a checkout-free import can
+load those assets. JSR users must still provide the pinned OpenModelica 1.27.0 and Modelica Standard
+Library 4.1.0 runtime. The signed digest-pinned GHCR image remains the recommended deployment: it
+includes that runtime and the release-gate proof that both shipped kits compile and run.
 
-`v0.4.1` is tagged in git, but it was not published on JSR: the registry rejected the `0.4.1` module
-graph because import attributes with `type: "text"` are unsupported.
+```bash
+deno run -A jsr:@casys/mcp-modelica@0.4.2/server --port=3016
+```
 
-The published JSR package remains `@casys/mcp-modelica@0.4.0`. It reopens kit models, scenarios, and
-compiler-derived schemas as file URLs, so those assets cannot load outside a source checkout.
+A real package import from an empty working directory succeeded on the `0.4.2` release day, then
+succeeded again with `--cached-only` after that import primed the cache. Because the package was
+fresh that day, the check used `--minimum-dependency-age=0` only to bypass Deno's freshness
+quarantine; once that quarantine expires, the flag is not required.
 
-The `0.4.2` tree binds those same assets as ordinary generated TypeScript modules. Direct
-checkout-free JSR use becomes supported after `0.4.2` is published, when the host already supplies
-the pinned OpenModelica 1.27.0 and Modelica Standard Library 4.1.0 runtime. Until then, run a source
-checkout or the digest-pinned 0.4.0 container.
-
-The digest-pinned 0.4.0 container remains the recommended deployment: it includes that runtime and
-the release-gate proof that both shipped kits compile and run.
+`v0.4.1` is tagged in git, but JSR rejected the `0.4.1` module graph: import attributes with
+`type: "text"` are unsupported.
 
 ### Run a source checkout
 
