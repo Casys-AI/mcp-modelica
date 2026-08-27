@@ -40,17 +40,17 @@ mcp-syson + @casys/constraint-solver → units, margins, pass/fail/unresolved
 
 ### Recommended: run the verified container
 
-The previously published `0.4.2` signed multi-architecture image supports Linux AMD64
-and ARM64. The digest below is its release index and avoids a mutable tag. Both
-architecture labels name revision `5c8484728dc6e1bdb1b84f62bb99449c414807bb`
-and version `0.4.2`:
+The published `0.4.3` multi-architecture image supports Linux AMD64 and ARM64.
+Its immutable release-index digest is the deployment authority; `:latest` is a mutable
+convenience tag. Both architecture labels name revision
+`5c423614da366e4330f3fbe261d3770e68907723` and OCI version `0.4.3`:
 
 ```bash
 mkdir -p modelica-runs
 docker run --rm --name mcp-modelica \
   --publish 127.0.0.1:3016:3016 \
   --volume "$PWD/modelica-runs:/runs" \
-  ghcr.io/casys-ai/mcp-modelica@sha256:378ed2f51533306f948ef6cfa1224b0466b720eefac3162c0653478d81023ccd
+  ghcr.io/casys-ai/mcp-modelica@sha256:424076b8f7d6fa57a6db09c30c175c5abbef5e3bc4aa78c2d7525b9e555d5822
 ```
 
 This image contains OpenModelica 1.27.0 and Modelica Standard Library 4.1.0. Its build gate compiles
@@ -75,9 +75,6 @@ on the host; the connection entry is typically:
 }
 ```
 
-The previously published `0.4.2` JSR package and GHCR image are HTTP-only. Their
-digest-pinned HTTP path remains valid.
-
 ### Native stdio in version 0.4.3
 
 Version `0.4.3` keeps Streamable HTTP as its default and adds one explicit local-process
@@ -94,8 +91,20 @@ and Modelica Standard Library 4.1.0 are available on the host:
 deno run -A jsr:@casys/mcp-modelica@0.4.3/server --stdio
 ```
 
+The published container entry point invokes `deno … server.ts` directly and its CMD
+supplies the HTTP arguments. To run native stdio, replace that CMD by placing
+`--stdio` after the immutable image digest; keep the evidence volume:
+
+```bash
+mkdir -p modelica-runs
+docker run --rm -i --name mcp-modelica \
+  --volume "$PWD/modelica-runs:/runs" \
+  ghcr.io/casys-ai/mcp-modelica@sha256:424076b8f7d6fa57a6db09c30c175c5abbef5e3bc4aa78c2d7525b9e555d5822 \
+  --stdio
+```
+
 `--stdio` cannot be combined with `--port` or `--hostname`; omitting it starts HTTP
-exactly as before. The older `0.4.2` artifacts do not gain this capability.
+exactly as before.
 
 ### Run from JSR
 
@@ -308,9 +317,8 @@ resource bootstrap is published.
 
 ## Development
 
-Version 0.4.3 adds only the explicit `--stdio` process path above; HTTP remains the
-default and there is no implicit compatibility mode. Published 0.4.2 artifacts remain
-HTTP-only.
+Version 0.4.3 adds the explicit `--stdio` process path above while keeping HTTP as the
+default; the container stdio command replaces its HTTP CMD with `--stdio`.
 
 ```bash
 deno task check
