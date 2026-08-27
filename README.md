@@ -24,7 +24,9 @@ This is not a generic Modelica or code-execution endpoint. A caller can select a
 scenario, then apply typed, bounded numeric overrides. It cannot submit a `.mo` file, a `.mos`
 script, a shell command, or a path.
 
-The MCP endpoint is stateless HTTP only, implementing protocol `2026-07-28`.
+Stateless HTTP remains the default transport and implements protocol `2026-07-28`.
+Version `0.4.3` also provides an explicit native stdio process mode for MCP hosts that
+launch their server command directly.
 
 ```text
 modelica_simulate → computed temperature / time / energy evidence
@@ -38,9 +40,10 @@ mcp-syson + @casys/constraint-solver → units, margins, pass/fail/unresolved
 
 ### Recommended: run the verified container
 
-Release `0.4.2` is the current signed multi-architecture image for Linux AMD64 and ARM64. The digest
-below is the release index and avoids a mutable tag. Both architecture labels name revision
-`5c8484728dc6e1bdb1b84f62bb99449c414807bb` and version `0.4.2`:
+The previously published `0.4.2` signed multi-architecture image supports Linux AMD64
+and ARM64. The digest below is its release index and avoids a mutable tag. Both
+architecture labels name revision `5c8484728dc6e1bdb1b84f62bb99449c414807bb`
+and version `0.4.2`:
 
 ```bash
 mkdir -p modelica-runs
@@ -72,19 +75,38 @@ on the host; the connection entry is typically:
 }
 ```
 
-This release does not implement stdio. A client configuration with `command` and `args` will not
-work; use the HTTP URL.
+The previously published `0.4.2` JSR package and GHCR image are HTTP-only. Their
+digest-pinned HTTP path remains valid.
+
+### Native stdio in version 0.4.3
+
+Version `0.4.3` keeps Streamable HTTP as its default and adds one explicit local-process
+mode. From a checkout:
+
+```bash
+deno task serve:stdio
+```
+
+The same versioned server entry point can be launched from JSR when OpenModelica 1.27.0
+and Modelica Standard Library 4.1.0 are available on the host:
+
+```bash
+deno run -A jsr:@casys/mcp-modelica@0.4.3/server --stdio
+```
+
+`--stdio` cannot be combined with `--port` or `--hostname`; omitting it starts HTTP
+exactly as before. The older `0.4.2` artifacts do not gain this capability.
 
 ### Run from JSR
 
-The current JSR package is `@casys/mcp-modelica@0.4.2`. It binds kit models, scenarios, and
-compiler-derived schemas as ordinary generated TypeScript modules, so a checkout-free import can
-load those assets. JSR users must still provide the pinned OpenModelica 1.27.0 and Modelica Standard
-Library 4.1.0 runtime. The signed digest-pinned GHCR image remains the recommended deployment: it
-includes that runtime and the release-gate proof that both shipped kits compile and run.
+Version `0.4.3` binds kit models, scenarios, and compiler-derived schemas as ordinary
+generated TypeScript modules, so a checkout-free import can load those assets. JSR
+users must still provide OpenModelica 1.27.0 and Modelica Standard Library 4.1.0. A
+digest-pinned GHCR image remains the recommended deployment because it includes that
+runtime and the release-gate proof that both shipped kits compile and run.
 
 ```bash
-deno run -A jsr:@casys/mcp-modelica@0.4.2/server --port=3016
+deno run -A jsr:@casys/mcp-modelica@0.4.3/server --port=3016
 ```
 
 A real package import from an empty working directory succeeded on the `0.4.2` release day, then
@@ -286,8 +308,9 @@ resource bootstrap is published.
 
 ## Development
 
-Version 0.4.2 is HTTP stateless-only. It does not reintroduce the former stdio/session transport
-surface or carry a transport compatibility mode.
+Version 0.4.3 adds only the explicit `--stdio` process path above; HTTP remains the
+default and there is no implicit compatibility mode. Published 0.4.2 artifacts remain
+HTTP-only.
 
 ```bash
 deno task check
@@ -421,7 +444,7 @@ as one atomic batch. A rejected middle entry commits neither a partial `resource
 a `notifications/resources/list_changed` event; one successful batch emits one list-change event.
 
 The supported store is monotone for one server process: it can add at most twenty runs and exposes
-no delete/archive tool. The pinned `@casys/mcp-server@0.26.0` lifecycle supports dynamic
+no delete/archive tool. The pinned `@casys/mcp-server@0.26.1` lifecycle supports dynamic
 `unregisterResource` and list-change notification, but this provider has no authorized removal event
 to map onto it yet. It therefore does not invent eviction or archive semantics. An operator who
 removes run directories out of band must still restart this server because no provider operation
@@ -446,10 +469,10 @@ deployment that uses it.
 ## Relationship to `casys-digital-thread`
 
 This repository remains a useful standalone MCP server for approved-kit discovery, bounded
-OpenModelica execution, durable evidence, and integrations that want an HTTP solver sidecar.
+OpenModelica execution, durable evidence, and integrations that want a bounded solver server.
 
 It is not the current product execution path inside `casys-digital-thread`. There, admitted Modelica
-source is reopened and executed locally in a microVM by `compile.seal-admission@2` plus
+source is reopened and executed locally in a microVM by `compile.seal-admission@3` plus
 `simulate.run-admitted-modelica@1`; the pinned-kit operation `simulate.run-qualified-modelica-kit@1`
 is also a local microVM path. The Compose sidecar described by this repository's Docker packaging
 must not be treated as a substitute for either registered product operation or as evidence of the

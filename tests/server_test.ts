@@ -1,7 +1,11 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { join } from "@std/path";
 import { McpApp } from "@casys/mcp-server";
-import { createModelicaServer, createResultsViewerFileSystem } from "../server.ts";
+import {
+  createModelicaServer,
+  createResultsViewerFileSystem,
+  parseModelicaCli,
+} from "../server.ts";
 import { createModelicaService } from "../src/domain/service.ts";
 import { ValidationError } from "../src/domain/errors.ts";
 import { stableJson } from "../src/domain/hashing.ts";
@@ -12,6 +16,40 @@ import {
   ModelicaEvidenceResources,
 } from "../src/resources/modelica-evidence-resources.ts";
 import { FakeRunner, installLegacyRunFixture, LEGACY_RUN_ID } from "./test-helpers.ts";
+
+const PACKAGE_VERSION = (JSON.parse(
+  await Deno.readTextFile(new URL("../deno.json", import.meta.url)),
+) as { version: string }).version;
+
+Deno.test("CLI keeps HTTP as default and makes stdio explicit", () => {
+  assertEquals(parseModelicaCli([]), {
+    transport: "http",
+    port: 3016,
+    hostname: "127.0.0.1",
+  });
+  assertEquals(parseModelicaCli(["--hostname=0.0.0.0", "--port", "4016"]), {
+    transport: "http",
+    port: 4016,
+    hostname: "0.0.0.0",
+  });
+  assertEquals(parseModelicaCli(["--stdio"]), { transport: "stdio" });
+});
+
+Deno.test("CLI refuses mixed or repeated stdio transport arguments", () => {
+  for (
+    const args of [
+      ["--stdio", "--port=3016"],
+      ["--hostname", "127.0.0.1", "--stdio"],
+      ["--stdio", "--stdio"],
+    ]
+  ) {
+    assertThrows(
+      () => parseModelicaCli(args),
+      TypeError,
+      "--stdio",
+    );
+  }
+});
 
 Deno.test("MCP App resource registration is skipped until the viewer build exists", async () => {
   const directory = await Deno.makeTempDir({ prefix: "mcp-modelica-server-" });
@@ -108,11 +146,11 @@ Deno.test("built Modelica results viewer is registered as the MCP App resource",
 
 Deno.test("MCP App viewer resolves the exact published JSR dist URL", async () => {
   const directory = await Deno.makeTempDir({ prefix: "mcp-modelica-server-" });
-  const moduleUrl = "https://jsr.io/@casys/mcp-modelica/0.4.2/server.ts";
+  const moduleUrl = `https://jsr.io/@casys/mcp-modelica/${PACKAGE_VERSION}/server.ts`;
   const expectedResultsViewerUrl =
-    "https://jsr.io/@casys/mcp-modelica/0.4.2/src/ui/dist/results-viewer/index.html";
+    `https://jsr.io/@casys/mcp-modelica/${PACKAGE_VERSION}/src/ui/dist/results-viewer/index.html`;
   const expectedRunListViewerUrl =
-    "https://jsr.io/@casys/mcp-modelica/0.4.2/src/ui/dist/run-list-viewer/index.html";
+    `https://jsr.io/@casys/mcp-modelica/${PACKAGE_VERSION}/src/ui/dist/run-list-viewer/index.html`;
   try {
     const service = await createModelicaService({
       runsDirectory: directory,
@@ -186,7 +224,7 @@ Deno.test("HTTP MCP wire exposes result viewer metadata and structured simulatio
       const discovered = await rpc(port, "server/discover", {});
       assertEquals(discovered.result.serverInfo, {
         name: "mcp-modelica",
-        version: "0.4.2",
+        version: PACKAGE_VERSION,
       });
       const listed = await rpc(port, "tools/list", {});
       const tools = listed.result.tools as Array<Record<string, unknown>>;

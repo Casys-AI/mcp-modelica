@@ -1,8 +1,9 @@
 /**
  * MCP bootstrap for approved OpenModelica simulation kits.
  *
- * Stateless HTTP is the only transport. It is loopback-only by default and
- * Compose passes --hostname=0.0.0.0 inside the dedicated container.
+ * Streamable HTTP remains the default and is loopback-only unless an operator
+ * selects another hostname. An explicit --stdio flag starts one local process
+ * for one client without changing the HTTP default or the registered tools.
  */
 import { McpApp, type RegisterViewersSummary } from "@casys/mcp-server";
 import { ModelicaToolsClient } from "./src/client.ts";
@@ -46,13 +47,13 @@ export async function createModelicaServer(
     ((message: string) => console.error(`[mcp-modelica] ${message}`));
   const server = new McpApp({
     name: "mcp-modelica",
-    version: "0.4.2",
+    version: "0.4.3",
     maxConcurrent: 1,
     backpressureStrategy: "queue",
     transport: "stateless",
     validateSchema: true,
-    // Runs are created after the stateless HTTP transport starts. Predeclare
-    // resources so their exact evidence can be registered safely afterwards.
+    // Runs are created after either transport starts. Predeclare resources so
+    // their exact evidence can be registered safely afterwards.
     expectResources: true,
     logger,
   });
@@ -180,44 +181,59 @@ function isRemoteViewerUrl(path: string): boolean {
 }
 
 if (import.meta.main) {
-  const cli = parseCli(Deno.args);
+  const cli = parseModelicaCli(Deno.args);
   const { server } = await createModelicaServer();
-  await server.startHttp({
-    port: cli.port,
-    hostname: cli.hostname,
-    cors: true,
-    onListen: (info) => {
-      console.error(
-        `[mcp-modelica] HTTP server listening on http://${info.hostname}:${info.port}`,
-      );
-    },
-  });
-  console.error("[mcp-modelica] Server ready.");
+  if (cli.transport === "stdio") {
+    await server.start();
+  } else {
+    await server.startHttp({
+      port: cli.port,
+      hostname: cli.hostname,
+      cors: true,
+      onListen: (info) => {
+        console.error(
+          `[mcp-modelica] HTTP server listening on http://${info.hostname}:${info.port}`,
+        );
+      },
+    });
+    console.error("[mcp-modelica] Server ready.");
+  }
 }
 
-interface CliOptions {
-  port: number;
-  hostname: string;
-}
+export type ModelicaCliOptions =
+  | { transport: "stdio" }
+  | { transport: "http"; port: number; hostname: string };
 
-function parseCli(args: readonly string[]): CliOptions {
+export function parseModelicaCli(args: readonly string[]): ModelicaCliOptions {
   let port = DEFAULT_HTTP_PORT;
   let hostname = "127.0.0.1";
+  let stdio = false;
+  let hasHttpArgument = false;
   for (let index = 0; index < args.length; index++) {
     const argument = args[index];
-    if (argument.startsWith("--port=")) {
+    if (argument === "--stdio") {
+      if (stdio) throw new TypeError("--stdio may only be specified once.");
+      stdio = true;
+    } else if (argument.startsWith("--port=")) {
+      hasHttpArgument = true;
       port = positivePort(argument.slice("--port=".length));
     } else if (argument === "--port") {
+      hasHttpArgument = true;
       port = positivePort(args[++index]);
     } else if (argument.startsWith("--hostname=")) {
+      hasHttpArgument = true;
       hostname = nonEmpty(argument.slice("--hostname=".length), "--hostname");
     } else if (argument === "--hostname") {
+      hasHttpArgument = true;
       hostname = nonEmpty(args[++index], "--hostname");
     } else {
       throw new TypeError(`Unknown argument '${argument}'.`);
     }
   }
-  return { port, hostname };
+  if (stdio && hasHttpArgument) {
+    throw new TypeError("--stdio cannot be combined with --port or --hostname.");
+  }
+  return stdio ? { transport: "stdio" } : { transport: "http", port, hostname };
 }
 
 function positivePort(value: string | undefined): number {
