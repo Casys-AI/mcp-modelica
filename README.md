@@ -41,21 +41,20 @@ mcp-syson + @casys/constraint-solver → units, margins, pass/fail/unresolved
 
 ### Recommended: run the verified container
 
-The `0.6.0` multi-architecture image below is an explicit, immutable historical deployment example.
-It is not the forthcoming `0.6.1` image: resolve every newer release's own index digest after its
-tag publishes, rather than replacing this digest with a mutable tag:
+The published `0.6.1` multi-architecture image below is pinned by its immutable release-index
+digest. Use this qualified digest, rather than mutable tag `0.6.1`, for deployment:
 
 ```bash
 mkdir -p modelica-runs
 docker run --rm --name mcp-modelica \
   --publish 127.0.0.1:3016:3016 \
   --volume "$PWD/modelica-runs:/runs" \
-  ghcr.io/casys-ai/mcp-modelica@sha256:79caaa0403868d3700cda7f95bccddb4c70f65cfe871b6d42aeb094e06196a2c
+  ghcr.io/casys-ai/mcp-modelica@sha256:05df482dafdfe0c12da96332760294df1537c1e6601283ecef3497efc0cb1d29
 ```
 
-This image contains OpenModelica 1.27.0 and Modelica Standard Library 4.1.0. The qualified `0.6.1`
-image pins and build-asserts Deno 2.9.6 while preserving that OMC/MSL pair. Its build gate compiles
-and runs both shipped kits before the final image is published. The MCP endpoint is
+This qualified `0.6.1` image contains OpenModelica 1.27.0 and Modelica Standard Library 4.1.0. It
+pins and build-asserts Deno 2.9.6 while preserving that OMC/MSL pair. Its build gate compiles and
+runs both shipped kits before the final image is published. The MCP endpoint is
 `http://127.0.0.1:3016/mcp`; the process probe is:
 
 ```bash
@@ -100,7 +99,7 @@ digest; keep the evidence volume:
 mkdir -p modelica-runs
 docker run --rm -i --name mcp-modelica \
   --volume "$PWD/modelica-runs:/runs" \
-  ghcr.io/casys-ai/mcp-modelica@sha256:79caaa0403868d3700cda7f95bccddb4c70f65cfe871b6d42aeb094e06196a2c \
+  ghcr.io/casys-ai/mcp-modelica@sha256:05df482dafdfe0c12da96332760294df1537c1e6601283ecef3497efc0cb1d29 \
   --stdio
 ```
 
