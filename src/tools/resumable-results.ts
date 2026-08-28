@@ -1,5 +1,9 @@
 import type { StructuredToolResult } from "@casys/mcp-server";
-import type { ResumableRequestResult } from "../application/resumable-simulation-service.ts";
+import type {
+  ResumableRequestResult,
+  SealedResultSeriesResult,
+  SimulationRequestTemplateResult,
+} from "../application/resumable-simulation-service.ts";
 import type { SimulationManifest } from "../domain/simulation-manifest.ts";
 
 export const MODELICA_RESUMABLE_RESULTS_SCHEMA_VERSION = "2.1" as const;
@@ -7,6 +11,10 @@ export const MODELICA_RESUMABLE_RESULTS_SCHEMA_VERSION = "2.1" as const;
 type JsonSchema = Record<string, unknown>;
 
 const digest: JsonSchema = { type: "string", pattern: "^[0-9a-f]{64}$" };
+const requestId: JsonSchema = {
+  type: "string",
+  pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+};
 const runId: JsonSchema = {
   type: "string",
   pattern: "^run_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
@@ -210,6 +218,53 @@ const requestBase: JsonSchema = {
   manifest_sha256: digest,
   status: { enum: ["pending", "running", "completed", "rejected", "recovery_required"] },
 };
+const submit: JsonSchema = closed({
+  request_id: { type: "string", pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+  manifest_sha256: digest,
+  model_id: { type: "string", minLength: 1 },
+  model_version: { type: "string", minLength: 1 },
+  scenario_id: { type: "string", minLength: 1 },
+  parameters: { type: "object", additionalProperties: quantity },
+  timeout_ms: { type: "integer", minimum: 1, maximum: 120000 },
+}, [
+  "request_id",
+  "manifest_sha256",
+  "model_id",
+  "model_version",
+  "scenario_id",
+  "parameters",
+  "timeout_ms",
+]);
+const resultArtifact: JsonSchema = closed({
+  uri: {
+    type: "string",
+    pattern: "^casys://modelica/requests/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/artifacts/result\\.csv$",
+  },
+  mediaType: { const: "text/csv" },
+  sha256: digest,
+  bytes: { type: "integer", minimum: 1 },
+}, ["uri", "mediaType", "sha256", "bytes"]);
+const seriesColumn: JsonSchema = closed({
+  name: { type: "string", minLength: 1 },
+  minimum: { type: "number" },
+  maximum: { type: "number" },
+  final: { type: "number" },
+}, ["name", "minimum", "maximum", "final"]);
+const seriesSample: JsonSchema = closed({
+  row_index: { type: "integer", minimum: 0 },
+  values: { type: "object", additionalProperties: { type: "number" } },
+}, ["row_index", "values"]);
+const seriesSampling: JsonSchema = closed({
+  strategy: { const: "evenly-spaced-including-endpoints" },
+  requested_max_samples: { type: "integer", minimum: 1, maximum: 128 },
+  returned_samples: { type: "integer", minimum: 1, maximum: 128 },
+}, ["strategy", "requested_max_samples", "returned_samples"]);
+const sealedSeries: JsonSchema = closed({
+  row_count: { type: "integer", minimum: 1 },
+  columns: { type: "array", minItems: 1, maxItems: 128, items: seriesColumn },
+  sampling: seriesSampling,
+  samples: { type: "array", minItems: 1, maxItems: 128, items: seriesSample },
+}, ["row_count", "columns", "sampling", "samples"]);
 const pendingRequest: JsonSchema = closed({ ...requestBase, status: { const: "pending" } }, [
   "request_id",
   "request_sha256",
@@ -269,6 +324,21 @@ export const simulationRequestOutputSchema: JsonSchema = closed({
   },
 }, ["schemaVersion", "kind", "request"]);
 
+export const simulationRequestTemplateOutputSchema: JsonSchema = closed({
+  schemaVersion: { const: MODELICA_RESUMABLE_RESULTS_SCHEMA_VERSION },
+  kind: { const: "simulation-request-template" },
+  submit,
+  request_sha256: digest,
+}, ["schemaVersion", "kind", "submit", "request_sha256"]);
+
+export const sealedResultSeriesOutputSchema: JsonSchema = closed({
+  schemaVersion: { const: MODELICA_RESUMABLE_RESULTS_SCHEMA_VERSION },
+  kind: { const: "sealed-result-series" },
+  request_id: requestId,
+  result: resultArtifact,
+  series: sealedSeries,
+}, ["schemaVersion", "kind", "request_id", "result", "series"]);
+
 export function toSimulationManifestResult(
   manifestValue: SimulationManifest,
 ): StructuredToolResult {
@@ -287,6 +357,25 @@ export function toSimulationRequestResult(result: ResumableRequestResult): Struc
   const request = result.request as { request_id: string; status: string };
   return {
     content: `Simulation request ${request.request_id}: ${request.status}.`,
+    structuredContent: result,
+  };
+}
+
+export function toSimulationRequestTemplateResult(
+  result: SimulationRequestTemplateResult,
+): StructuredToolResult {
+  return {
+    content:
+      `Prepared a non-executing simulation submission template for ${result.submit.request_id}.`,
+    structuredContent: result,
+  };
+}
+
+export function toSealedResultSeriesResult(result: SealedResultSeriesResult): StructuredToolResult {
+  return {
+    content:
+      `Read ${result.series.row_count} rows from the sealed result series for ${result.request_id}; ` +
+      `${result.series.sampling.returned_samples} deterministic samples returned.`,
     structuredContent: result,
   };
 }

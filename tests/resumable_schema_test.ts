@@ -1,12 +1,16 @@
 import { assert, assertEquals } from "@std/assert";
 import {
+  sealedResultSeriesOutputSchema,
   simulationManifestOutputSchema,
   simulationRequestOutputSchema,
+  simulationRequestTemplateOutputSchema,
 } from "../src/tools/resumable-results.ts";
 
 Deno.test("2.1 wire schemas close every fixed top-level and nested object", () => {
   assertClosedObjects(simulationManifestOutputSchema, "manifest-output");
   assertClosedObjects(simulationRequestOutputSchema, "request-output");
+  assertClosedObjects(simulationRequestTemplateOutputSchema, "request-template-output");
+  assertClosedObjects(sealedResultSeriesOutputSchema, "sealed-series-output");
 
   const request = object(object(simulationRequestOutputSchema).properties).request;
   const variants = object(request).oneOf;

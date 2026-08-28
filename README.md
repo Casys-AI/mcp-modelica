@@ -24,9 +24,10 @@ This is not a generic Modelica or code-execution endpoint. A caller can select a
 scenario, then apply typed, bounded numeric overrides. It cannot submit a `.mo` file, a `.mos`
 script, a shell command, or a path.
 
-Stateless HTTP remains the default transport and implements protocol `2026-07-28`.
-Version `0.4.3` also provides an explicit native stdio process mode for MCP hosts that
-launch their server command directly.
+Stateless HTTP remains the default transport and implements protocol `2026-07-28`. Version `0.5.0`
+also provides an explicit native stdio process mode for MCP hosts that launch their server command
+directly. Its resumable flow adds a server-issued request template and bounded readback of the exact
+sealed result series.
 
 ```text
 modelica_simulate → computed temperature / time / energy evidence
@@ -40,17 +41,15 @@ mcp-syson + @casys/constraint-solver → units, margins, pass/fail/unresolved
 
 ### Recommended: run the verified container
 
-The published `0.4.3` multi-architecture image supports Linux AMD64 and ARM64.
-Its immutable release-index digest is the deployment authority; `:latest` is a mutable
-convenience tag. Both architecture labels name revision
-`5c423614da366e4330f3fbe261d3770e68907723` and OCI version `0.4.3`:
+The tag-qualified `0.5.0` multi-architecture image supports Linux AMD64 and ARM64. Resolve its
+release-index digest and use that immutable identity for deployment:
 
 ```bash
 mkdir -p modelica-runs
 docker run --rm --name mcp-modelica \
   --publish 127.0.0.1:3016:3016 \
   --volume "$PWD/modelica-runs:/runs" \
-  ghcr.io/casys-ai/mcp-modelica@sha256:424076b8f7d6fa57a6db09c30c175c5abbef5e3bc4aa78c2d7525b9e555d5822
+  ghcr.io/casys-ai/mcp-modelica:0.5.0
 ```
 
 This image contains OpenModelica 1.27.0 and Modelica Standard Library 4.1.0. Its build gate compiles
@@ -75,47 +74,47 @@ on the host; the connection entry is typically:
 }
 ```
 
-### Native stdio in version 0.4.3
+### Native stdio
 
-Version `0.4.3` keeps Streamable HTTP as its default and adds one explicit local-process
-mode. From a checkout:
+Version `0.5.0` keeps Streamable HTTP as its default and provides an explicit local-process mode.
+From a checkout:
 
 ```bash
 deno task serve:stdio
 ```
 
-The same versioned server entry point can be launched from JSR when OpenModelica 1.27.0
-and Modelica Standard Library 4.1.0 are available on the host:
+The same versioned server entry point can be launched from JSR when OpenModelica 1.27.0 and Modelica
+Standard Library 4.1.0 are available on the host:
 
 ```bash
-deno run -A jsr:@casys/mcp-modelica@0.4.3/server --stdio
+deno run -A jsr:@casys/mcp-modelica@0.5.0/server --stdio
 ```
 
-The published container entry point invokes `deno … server.ts` directly and its CMD
-supplies the HTTP arguments. To run native stdio, replace that CMD by placing
-`--stdio` after the immutable image digest; keep the evidence volume:
+The published container entry point invokes `deno … server.ts` directly and its CMD supplies the
+HTTP arguments. To run native stdio, replace that CMD by placing `--stdio` after the immutable image
+digest; keep the evidence volume:
 
 ```bash
 mkdir -p modelica-runs
 docker run --rm -i --name mcp-modelica \
   --volume "$PWD/modelica-runs:/runs" \
-  ghcr.io/casys-ai/mcp-modelica@sha256:424076b8f7d6fa57a6db09c30c175c5abbef5e3bc4aa78c2d7525b9e555d5822 \
+  ghcr.io/casys-ai/mcp-modelica:0.5.0 \
   --stdio
 ```
 
-`--stdio` cannot be combined with `--port` or `--hostname`; omitting it starts HTTP
-exactly as before.
+`--stdio` cannot be combined with `--port` or `--hostname`; omitting it starts HTTP exactly as
+before.
 
 ### Run from JSR
 
-Version `0.4.3` binds kit models, scenarios, and compiler-derived schemas as ordinary
-generated TypeScript modules, so a checkout-free import can load those assets. JSR
-users must still provide OpenModelica 1.27.0 and Modelica Standard Library 4.1.0. A
-digest-pinned GHCR image remains the recommended deployment because it includes that
-runtime and the release-gate proof that both shipped kits compile and run.
+Version `0.5.0` binds kit models, scenarios, and compiler-derived schemas as ordinary generated
+TypeScript modules, so a checkout-free import can load those assets. JSR users must still provide
+OpenModelica 1.27.0 and Modelica Standard Library 4.1.0. A digest-pinned GHCR image remains the
+recommended deployment because it includes that runtime and the release-gate proof that both shipped
+kits compile and run.
 
 ```bash
-deno run -A jsr:@casys/mcp-modelica@0.4.3/server --port=3016
+deno run -A jsr:@casys/mcp-modelica@0.5.0/server --port=3016
 ```
 
 A real package import from an empty working directory succeeded on the `0.4.2` release day, then
@@ -161,6 +160,14 @@ Use the 2.1 manifest/submit/request flow when a caller needs a durable, idempote
 crash-safe readback. The frozen 1.0 names exist for compatibility; new evidence consumers should
 prefer recorded 2.0 or resumable 2.1 contracts.
 
+For the resumable path, first call `modelica_simulation_manifest_get`, then pass its exact
+`manifest_sha256` to `modelica_simulation_request_template_get` on the same server process. The
+template accepts only the latest manifest identity that process issued for the selected qualified
+model, version, and scenario. It prepares the fully explicit submit payload and kit defaults without
+another runtime probe, claiming capacity, creating a run directory, or executing a simulation.
+Review or adjust the bounded parameter values, then pass its `submit` object to
+`modelica_simulation_submit`.
+
 ## Security boundary
 
 - Callers cannot choose source, scenario files, solver scripts, commands, or paths. The server
@@ -177,10 +184,11 @@ Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
 ## Tools
 
-The original names remain frozen at envelope `1.0`; they do not acquire fields conditionally. Their
-recorded successors use envelope `2.0` and expose the richer, resource-addressable ledger. The
-resumable operations use envelope `2.1`; they are a separate durable request authority and do not
-mutate the historical tool contracts or their immutable run ledgers.
+This source tree exposes the original names frozen at envelope `1.0`; they do not acquire fields
+conditionally. Their recorded successors use envelope `2.0` and expose the richer,
+resource-addressable ledger. The resumable operations use envelope `2.1`; they are a separate
+durable request authority and do not mutate the historical tool contracts or their immutable run
+ledgers.
 
 | Frozen 1.0 tool     | Recorded 2.0 successor       | Role                                                            |
 | ------------------- | ---------------------------- | --------------------------------------------------------------- |
@@ -191,16 +199,27 @@ mutate the historical tool contracts or their immutable run ledgers.
 
 ### Resumable 2.1 successor
 
-| Tool                               | Role                                                                  |
-| ---------------------------------- | --------------------------------------------------------------------- |
-| `modelica_simulation_manifest_get` | Re-open the qualified inputs and return the exact manifest identity.  |
-| `modelica_simulation_submit`       | Durably claim and execute one fully explicit, manifest-bound request. |
-| `modelica_simulation_request_get`  | Read or reconcile the request state without starting OpenModelica.    |
+| Tool                                       | Role                                                                     |
+| ------------------------------------------ | ------------------------------------------------------------------------ |
+| `modelica_simulation_manifest_get`         | Re-open the qualified inputs and return the exact manifest identity.     |
+| `modelica_simulation_request_template_get` | Prepare a reviewed, explicit submit payload without simulation.          |
+| `modelica_simulation_submit`               | Durably claim and execute one fully explicit, manifest-bound request.    |
+| `modelica_simulation_request_get`          | Read or reconcile the request state without starting OpenModelica.       |
+| `modelica_simulation_series_get`           | Summarize one sealed successful CSV without returning its full contents. |
 
 `modelica_simulation_manifest_get` re-opens and hashes the exact qualified Modelica source, scenario
 source, optional compiler schema, public scenario projection, parameter bindings/conversions, result
 normalizer, lowering identity and OMC engine. Its `manifest_sha256` is required by
 `modelica_simulation_submit`.
+
+`modelica_simulation_request_template_get` requires the selected qualified model, version, scenario,
+caller-owned `request_id`, and exact `manifest_sha256` most recently issued by the explicit manifest
+operation in that same server process. A restart deliberately requires a fresh manifest call. It
+returns every qualified parameter at its kit-owned default with its explicit unit and a bounded
+timeout. It neither probes the runtime nor creates durable state or a simulation. Submission
+revalidates that supplied identity against the current runtime. The returned `request_sha256`
+identifies the exact prepared submit bytes; changing any submit field changes that identity and
+remains subject to normal submit validation.
 
 Submit requires a caller-supplied `request_id`, explicit timeout, and every qualified parameter with
 its exact unit and bound; it accepts neither defaults nor extras. The server durably claims the
@@ -213,6 +232,13 @@ that same run or rejection without another probe; changed bytes are a collision.
 run.json committed before its claim, reports a live OS lock as running, reports an unstarted durable
 claim as retryable `pending`, preserves a manifest rejection, or returns `recovery_required` without
 a rerun after a started owner disappears.
+
+`modelica_simulation_series_get` accepts only a completed 2.1 `request_id` and an optional bounded
+sample limit. It revalidates the completed ledger and its exact `result.csv`, then returns the CSV
+column catalogue, numeric minimum/maximum/final values, and deterministic evenly spaced samples
+including the endpoints. The reader never accepts a file path, resource URI, Modelica source,
+script, or solver selection. It reports CSV numbers as raw solver columns and does not invent units
+or a requirement verdict.
 
 Completed replay treats the manifest's OMC/MSL identity as historical evidence: it does not compare
 it to or probe the current image. It instead verifies the sealed manifest, exact copied source
@@ -317,8 +343,8 @@ resource bootstrap is published.
 
 ## Development
 
-Version 0.4.3 adds the explicit `--stdio` process path above while keeping HTTP as the
-default; the container stdio command replaces its HTTP CMD with `--stdio`.
+Version 0.5.0 keeps the explicit `--stdio` process path above while retaining HTTP as the default;
+the container stdio command replaces its HTTP CMD with `--stdio`.
 
 ```bash
 deno task check

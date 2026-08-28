@@ -88,18 +88,27 @@ function parseCsvRow(line: string): string[] {
   const values: string[] = [];
   let current = "";
   let quoted = false;
+  let quoteClosed = false;
   for (let index = 0; index < line.length; index++) {
     const character = line[index];
     if (character === '"') {
       if (quoted && line[index + 1] === '"') {
         current += '"';
         index++;
+      } else if (quoted) {
+        quoted = false;
+        quoteClosed = true;
+      } else if (current.length === 0 && !quoteClosed) {
+        quoted = true;
       } else {
-        quoted = !quoted;
+        throw new Error("OpenModelica CSV contains an invalid quote.");
       }
     } else if (character === "," && !quoted) {
       values.push(current);
       current = "";
+      quoteClosed = false;
+    } else if (quoteClosed) {
+      throw new Error("OpenModelica CSV contains characters after a closing quote.");
     } else {
       current += character;
     }

@@ -9,7 +9,16 @@ import {
   sealManifest,
   type SimulationManifest,
 } from "../domain/simulation-manifest.ts";
-import { parseCanonicalSimulationRequest } from "../domain/simulation-request.ts";
+import {
+  parseCanonicalSimulationRequest,
+  type SimulationSubmitInput,
+} from "../domain/simulation-request.ts";
+import {
+  DEFAULT_SEALED_CSV_SERIES_SAMPLES,
+  MAX_SEALED_CSV_SERIES_SAMPLES,
+  type SealedCsvSeriesSummary,
+  summarizeSealedNumericCsv,
+} from "../domain/sealed-csv-series.ts";
 import type {
   EngineIdentity,
   ModelicaKit,
@@ -45,11 +54,35 @@ export interface ResumableRequestResult extends Record<string, unknown> {
   request: Record<string, unknown>;
 }
 
+/** A non-executing, fully explicit payload for modelica_simulation_submit. */
+export interface SimulationRequestTemplateResult extends Record<string, unknown> {
+  schemaVersion: typeof MODELICA_RESUMABLE_SCHEMA_VERSION;
+  kind: "simulation-request-template";
+  submit: SimulationSubmitInput;
+  request_sha256: string;
+}
+
+/** Bounded summary of the exact result.csv named by a completed 2.1 ledger. */
+export interface SealedResultSeriesResult extends Record<string, unknown> {
+  schemaVersion: typeof MODELICA_RESUMABLE_SCHEMA_VERSION;
+  kind: "sealed-result-series";
+  request_id: string;
+  result: {
+    uri: string;
+    mediaType: "text/csv";
+    sha256: string;
+    bytes: number;
+  };
+  series: SealedCsvSeriesSummary;
+}
+
 /**
  * 2.1 successor application service.  It has its own request/claim ledger and
  * never asks the v1/v2 run-list surfaces to decide idempotence or recovery.
  */
 export class ResumableSimulationService {
+  private readonly issuedManifestDigests = new Map<string, string>();
+
   constructor(
     private readonly method: QualifiedSimulationMethodPort,
     readonly store: SimulationRequestStorePort,
@@ -59,7 +92,100 @@ export class ResumableSimulationService {
 
   async getManifest(rawInput: unknown): Promise<SimulationManifest> {
     const identity = parseManifestIdentityInput(rawInput);
-    return await this.buildManifest(identity, await this.method.getRuntimeEngineIdentity());
+    const manifest = await this.buildManifest(
+      identity,
+      await this.method.getRuntimeEngineIdentity(),
+    );
+    this.issuedManifestDigests.set(
+      manifestIssuanceKey(identity),
+      manifest.manifest_sha256,
+    );
+    return manifest;
+  }
+
+  /**
+   * Assemble the exact 2.1 submission envelope from an already established
+   * manifest digest and kit-owned defaults. It performs no runtime probe and
+   * creates no claim, run directory, or simulation.
+   */
+  async getRequestTemplate(rawInput: unknown): Promise<SimulationRequestTemplateResult> {
+    const input = parseRequestTemplateInput(rawInput);
+    if (
+      this.issuedManifestDigests.get(manifestIssuanceKey(input)) !==
+        input.manifest_sha256
+    ) {
+      throw new ValidationError(
+        "manifest_sha256 must match the manifest most recently issued by " +
+          "modelica_simulation_manifest_get for this model, version, and scenario in this " +
+          "server process. Call that operation first and pass its exact digest.",
+      );
+    }
+    const kit = this.method.getQualifiedKit(input.model_id, input.model_version);
+    const parameters = Object.fromEntries(
+      kit.parameters.map((parameter) => [
+        parameter.id,
+        { value: parameter.defaultValue, unit: parameter.unit },
+      ]),
+    );
+    // Reuse submission validation so a malformed qualified registry cannot
+    // produce a payload that the paired submit endpoint would reject.
+    const canonical = await parseCanonicalSimulationRequest({
+      request_id: input.request_id,
+      manifest_sha256: input.manifest_sha256,
+      model_id: input.model_id,
+      model_version: input.model_version,
+      scenario_id: input.scenario_id,
+      parameters,
+      timeout_ms: input.timeout_ms,
+    });
+    return {
+      schemaVersion: MODELICA_RESUMABLE_SCHEMA_VERSION,
+      kind: "simulation-request-template",
+      submit: {
+        request_id: canonical.request_id,
+        manifest_sha256: canonical.manifest_sha256,
+        model_id: canonical.model_id,
+        model_version: canonical.model_version,
+        scenario_id: canonical.scenario_id,
+        parameters: canonical.parameters,
+        timeout_ms: canonical.timeout_ms,
+      },
+      request_sha256: canonical.request_sha256,
+    };
+  }
+
+  /**
+   * Read only the immutable successful CSV bound to a completed 2.1 request.
+   * It deliberately cannot name a file, model, script, run id, or arbitrary
+   * resource URI.
+   */
+  async getSealedResultSeries(rawInput: unknown): Promise<SealedResultSeriesResult> {
+    const input = parseSealedResultSeriesInput(rawInput);
+    const evidence = await this.getCompletedEvidence(input.request_id);
+    if (evidence.runJson.record.status !== "succeeded") {
+      throw new ValidationError(
+        "Only a successful completed simulation request has a sealed result.csv series.",
+      );
+    }
+    const artifact = evidence.artifacts.find((candidate) => candidate.kind === "result");
+    if (!artifact || artifact.mediaType !== "text/csv") {
+      throw new ValidationError(
+        "Completed successful simulation request has no sealed text/csv result artifact.",
+      );
+    }
+    const verified = await this.store.readArtifact(input.request_id, artifact);
+    return {
+      schemaVersion: MODELICA_RESUMABLE_SCHEMA_VERSION,
+      kind: "sealed-result-series",
+      request_id: input.request_id,
+      result: {
+        uri: artifact.uri,
+        mediaType: "text/csv",
+        sha256: artifact.sha256,
+        bytes: artifact.bytes,
+      },
+      series: summarizeSealedNumericCsv(verified.source, input.max_samples),
+    };
   }
 
   async submit(rawInput: unknown): Promise<ResumableRequestResult> {
@@ -337,17 +463,17 @@ export class ResumableSimulationService {
   }
 
   /**
-   * Typed evidence seam for the MCP resource adapter. Every call reconciles
-   * and revalidates the completed claim, exact run ledger, and every artifact
-   * before any resource bytes can be returned.
+   * Pure typed evidence seam for read-only projections. It revalidates an
+   * already completed claim, exact run ledger, and every artifact, but never
+   * reconciles state, acquires a lock, probes a runtime, or writes recovery.
    */
   async getCompletedEvidence(requestId: string): Promise<{
     artifacts: ResumableArtifact[];
     runJson: DurableRunRecord;
   }> {
-    await this.getRequest({ request_id: requestId });
-    const claim = await this.store.readClaim(requestId);
-    const runJson = await this.store.readRunRecord(requestId);
+    const input = parseRequestGetInput({ request_id: requestId });
+    const claim = await this.store.readClaim(input.request_id);
+    const runJson = await this.store.readRunRecord(input.request_id);
     if (claim?.state !== "completed" || !runJson) {
       throw new ValidationError(
         "Simulation request does not have a sealed completed evidence ledger.",
@@ -869,6 +995,14 @@ export class ResumableSimulationService {
   }
 }
 
+function manifestIssuanceKey(identity: ManifestIdentityInput): string {
+  return stableJson([
+    identity.model_id,
+    identity.model_version,
+    identity.scenario_id,
+  ]);
+}
+
 function resource(
   uri: string,
   mediaType: string,
@@ -1142,9 +1276,14 @@ function assertExactArtifactKeys(artifact: Record<string, unknown>, kind: string
   }
 }
 
-function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
+function hasExactKeys(
+  value: Record<string, unknown>,
+  expected: readonly string[],
+  optional: readonly string[] = [],
+): boolean {
   const actual = Object.keys(value);
-  return actual.length === expected.length && actual.every((key) => expected.includes(key));
+  return actual.every((key) => expected.includes(key)) &&
+    expected.filter((key) => !optional.includes(key)).every((key) => key in value);
 }
 
 function exactKeys(value: Record<string, unknown>, expected: readonly string[]): void {
@@ -1228,6 +1367,92 @@ function parseRequestGetInput(value: unknown): { request_id: string } {
     );
   }
   return { request_id: input.request_id };
+}
+
+function parseRequestTemplateInput(value: unknown): {
+  request_id: string;
+  manifest_sha256: string;
+  model_id: string;
+  model_version: string;
+  scenario_id: string;
+  timeout_ms: number;
+} {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new ValidationError("modelica_simulation_request_template_get input must be an object.");
+  }
+  const input = value as Record<string, unknown>;
+  if (
+    !hasExactKeys(
+      input,
+      ["request_id", "manifest_sha256", "model_id", "model_version", "scenario_id", "timeout_ms"],
+      ["timeout_ms"],
+    )
+  ) {
+    throw new ValidationError(
+      "modelica_simulation_request_template_get accepts only request_id, manifest_sha256, model_id, model_version, scenario_id and optional timeout_ms.",
+    );
+  }
+  if (typeof input.request_id !== "string" || !REQUEST_ID.test(input.request_id)) {
+    throw new ValidationError(
+      "request_id must use 1-128 ASCII letters, digits, '.', '_' or '-' and must not begin with punctuation.",
+    );
+  }
+  if (typeof input.manifest_sha256 !== "string" || !SHA256.test(input.manifest_sha256)) {
+    throw new ValidationError("manifest_sha256 must be a lowercase SHA-256 digest.");
+  }
+  for (const key of ["model_id", "model_version", "scenario_id"] as const) {
+    if (
+      typeof input[key] !== "string" || input[key].trim().length === 0 ||
+      input[key] !== input[key].trim()
+    ) {
+      throw new ValidationError(`${key} must be a non-empty canonical string.`);
+    }
+  }
+  const timeoutMs = input.timeout_ms ?? 30_000;
+  if (
+    typeof timeoutMs !== "number" || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 ||
+    timeoutMs > 120_000
+  ) {
+    throw new ValidationError("timeout_ms must be an integer between 1 and 120000.");
+  }
+  return {
+    request_id: input.request_id,
+    manifest_sha256: input.manifest_sha256,
+    model_id: input.model_id as string,
+    model_version: input.model_version as string,
+    scenario_id: input.scenario_id as string,
+    timeout_ms: timeoutMs,
+  };
+}
+
+function parseSealedResultSeriesInput(value: unknown): {
+  request_id: string;
+  max_samples: number;
+} {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new ValidationError("modelica_simulation_series_get input must be an object.");
+  }
+  const input = value as Record<string, unknown>;
+  if (!hasExactKeys(input, ["request_id", "max_samples"], ["max_samples"])) {
+    throw new ValidationError(
+      "modelica_simulation_series_get accepts only request_id and optional max_samples.",
+    );
+  }
+  if (typeof input.request_id !== "string" || !REQUEST_ID.test(input.request_id)) {
+    throw new ValidationError(
+      "modelica_simulation_series_get requires a canonical request_id returned by submission.",
+    );
+  }
+  const maxSamples = input.max_samples ?? DEFAULT_SEALED_CSV_SERIES_SAMPLES;
+  if (
+    typeof maxSamples !== "number" || !Number.isSafeInteger(maxSamples) || maxSamples < 1 ||
+    maxSamples > MAX_SEALED_CSV_SERIES_SAMPLES
+  ) {
+    throw new ValidationError(
+      `max_samples must be an integer between 1 and ${MAX_SEALED_CSV_SERIES_SAMPLES}.`,
+    );
+  }
+  return { request_id: input.request_id, max_samples: maxSamples };
 }
 
 function requestResult(request: Record<string, unknown>): ResumableRequestResult {

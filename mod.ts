@@ -3,7 +3,11 @@ export { ModelicaToolsClient } from "./src/client.ts";
 export { ResumableSimulationToolsClient } from "./src/resumable-client.ts";
 export { OpenModelicaRunner } from "./src/api/omc-runner.ts";
 export { createModelicaService, ModelicaService } from "./src/domain/service.ts";
-export { ResumableSimulationService } from "./src/application/resumable-simulation-service.ts";
+export {
+  ResumableSimulationService,
+  type SealedResultSeriesResult,
+  type SimulationRequestTemplateResult,
+} from "./src/application/resumable-simulation-service.ts";
 export { RequestStore } from "./src/storage/request-store.ts";
 export { FileRequestLockPort } from "./src/storage/request-lock.ts";
 export { FileSimulationWorkspace } from "./src/storage/simulation-workspace.ts";
@@ -31,10 +35,17 @@ export {
 } from "./src/tools/results.ts";
 export {
   MODELICA_RESUMABLE_RESULTS_SCHEMA_VERSION,
+  sealedResultSeriesOutputSchema,
   simulationManifestOutputSchema,
   simulationRequestOutputSchema,
+  simulationRequestTemplateOutputSchema,
 } from "./src/tools/resumable-results.ts";
 export { MODELICA_RESUMABLE_SCHEMA_VERSION } from "./src/domain/simulation-manifest.ts";
+export {
+  DEFAULT_SEALED_CSV_SERIES_SAMPLES,
+  MAX_SEALED_CSV_SERIES_SAMPLES,
+  summarizeSealedNumericCsv,
+} from "./src/domain/sealed-csv-series.ts";
 export type {
   QualifiedSimulationMethodPort,
   RequestLockPort,

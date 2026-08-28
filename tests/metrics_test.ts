@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertThrows } from "@std/assert";
 import { extractCoffeeMachineMetrics } from "../src/domain/metrics.ts";
 import type { SimulationScenario } from "../src/domain/types.ts";
 import { NOMINAL_CSV } from "./test-helpers.ts";
@@ -31,4 +31,16 @@ Deno.test("unreached target remains absent rather than becoming a fictional valu
   );
   assertEquals("time_to_target_temperature" in result.metrics, false);
   assertEquals(result.warnings.length, 1);
+});
+
+Deno.test("metrics normalizer rejects characters after a closing CSV quote", () => {
+  assertThrows(
+    () =>
+      extractCoffeeMachineMetrics(
+        'time,waterTemperatureC,heaterPowerW\n0,"1"2,1500',
+        scenario,
+      ),
+    Error,
+    "characters after a closing quote",
+  );
 });

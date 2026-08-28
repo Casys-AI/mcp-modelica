@@ -47,7 +47,7 @@ export async function createModelicaServer(
     ((message: string) => console.error(`[mcp-modelica] ${message}`));
   const server = new McpApp({
     name: "mcp-modelica",
-    version: "0.4.3",
+    version: "0.5.0",
     maxConcurrent: 1,
     backpressureStrategy: "queue",
     transport: "stateless",

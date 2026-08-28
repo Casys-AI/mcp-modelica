@@ -85,6 +85,69 @@ Deno.test("stdio modern flow publishes and reads dynamic recorded evidence", asy
   }
 });
 
+Deno.test("stdio modern flow builds a non-executing template and reads a sealed series", async () => {
+  const directory = await Deno.makeTempDir({ prefix: "mcp-modelica-stdio-series-" });
+  const process = startFixture(directory);
+  try {
+    const manifestResponse = await process.request(modernRequest(1, "tools/call", {
+      name: "modelica_simulation_manifest_get",
+      arguments: {
+        model_id: "coffee-machine-v1",
+        model_version: "0.1.0",
+        scenario_id: "heat-up-nominal",
+      },
+    }));
+    const manifest = (manifestResponse.result?.structuredContent as {
+      manifest: { manifest_sha256: string };
+    }).manifest;
+    const templateResponse = await process.request(modernRequest(2, "tools/call", {
+      name: "modelica_simulation_request_template_get",
+      arguments: {
+        request_id: "stdio-template-series",
+        manifest_sha256: manifest.manifest_sha256,
+        model_id: "coffee-machine-v1",
+        model_version: "0.1.0",
+        scenario_id: "heat-up-nominal",
+      },
+    }));
+    const template = templateResponse.result?.structuredContent as {
+      kind: string;
+      submit: Record<string, unknown>;
+    };
+    assertEquals(template.kind, "simulation-request-template");
+    assertEquals((template.submit.parameters as Record<string, unknown>).water_mass, {
+      value: 0.5,
+      unit: "kg",
+    });
+
+    const submitted = await process.request(modernRequest(3, "tools/call", {
+      name: "modelica_simulation_submit",
+      arguments: template.submit,
+    }));
+    const submittedRequest = (submitted.result?.structuredContent as {
+      request: { status: string };
+    }).request;
+    assertEquals(submittedRequest.status, "completed");
+
+    const seriesResponse = await process.request(modernRequest(3, "tools/call", {
+      name: "modelica_simulation_series_get",
+      arguments: { request_id: "stdio-template-series", max_samples: 2 },
+    }));
+    const series = seriesResponse.result?.structuredContent as {
+      kind: string;
+      result: { mediaType: string };
+      series: { row_count: number; samples: Array<{ row_index: number }> };
+    };
+    assertEquals(series.kind, "sealed-result-series");
+    assertEquals(series.result.mediaType, "text/csv");
+    assertEquals(series.series.row_count, 4);
+    assertEquals(series.series.samples.map((sample) => sample.row_index), [0, 3]);
+  } finally {
+    await process.close();
+    await Deno.remove(directory, { recursive: true });
+  }
+});
+
 function startFixture(runsDirectory: string): StdioProcess {
   const child = new Deno.Command(Deno.execPath(), {
     args: [

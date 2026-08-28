@@ -239,6 +239,8 @@ Deno.test("HTTP MCP wire exposes result viewer metadata and structured simulatio
         "modelica_simulate_recorded",
         "modelica_simulation_manifest_get",
         "modelica_simulation_request_get",
+        "modelica_simulation_request_template_get",
+        "modelica_simulation_series_get",
         "modelica_simulation_submit",
       ]);
       for (
@@ -269,7 +271,13 @@ Deno.test("HTTP MCP wire exposes result viewer metadata and structured simulatio
       const requestGetTool = tools.find((candidate) =>
         candidate.name === "modelica_simulation_request_get"
       );
-      for (const tool of [manifestTool, submitTool, requestGetTool]) {
+      const templateTool = tools.find((candidate) =>
+        candidate.name === "modelica_simulation_request_template_get"
+      );
+      const seriesTool = tools.find((candidate) =>
+        candidate.name === "modelica_simulation_series_get"
+      );
+      for (const tool of [manifestTool, templateTool, submitTool, requestGetTool, seriesTool]) {
         const output = tool?.outputSchema as {
           properties?: { schemaVersion?: { const?: string } };
           additionalProperties?: boolean;
@@ -345,19 +353,31 @@ Deno.test("HTTP MCP wire exposes result viewer metadata and structured simulatio
       assertEquals(manifest.scenario.public.start_time_s, 0);
       assertEquals(typeof manifest.parameters[0].modelica_name, "string");
       assertEquals(typeof manifest.parameters[0].conversion.from, "string");
-      const resumable = await rpc(port, "tools/call", {
-        name: "modelica_simulation_submit",
+      const templateResponse = await rpc(port, "tools/call", {
+        name: "modelica_simulation_request_template_get",
         arguments: {
           request_id: "wire-resumable-request",
           manifest_sha256: manifest.manifest_sha256,
           model_id: "coffee-machine-v1",
           model_version: "0.1.0",
           scenario_id: "heat-up-nominal",
-          parameters: Object.fromEntries(
-            service.listKits()[0].parameters.map((parameter) => [parameter.id, parameter.default]),
-          ),
-          timeout_ms: 30_000,
         },
+      });
+      const template = templateResponse.result.structuredContent as {
+        kind: string;
+        submit: {
+          manifest_sha256: string;
+          parameters: Record<string, unknown>;
+          timeout_ms: number;
+        };
+      };
+      assertEquals(template.kind, "simulation-request-template");
+      assertEquals(template.submit.manifest_sha256, manifest.manifest_sha256);
+      assertEquals(template.submit.parameters.water_mass, { value: 0.5, unit: "kg" });
+      assertEquals(template.submit.timeout_ms, 30_000);
+      const resumable = await rpc(port, "tools/call", {
+        name: "modelica_simulation_submit",
+        arguments: template.submit,
       });
       const resumableRequest = (resumable.result.structuredContent as Record<string, unknown>)
         .request as {
@@ -375,6 +395,19 @@ Deno.test("HTTP MCP wire exposes result viewer metadata and structured simulatio
         ),
         true,
       );
+      const seriesResponse = await rpc(port, "tools/call", {
+        name: "modelica_simulation_series_get",
+        arguments: { request_id: "wire-resumable-request", max_samples: 2 },
+      });
+      const series = seriesResponse.result.structuredContent as {
+        kind: string;
+        result: { mediaType: string };
+        series: { row_count: number; samples: Array<{ row_index: number }> };
+      };
+      assertEquals(series.kind, "sealed-result-series");
+      assertEquals(series.result.mediaType, "text/csv");
+      assertEquals(series.series.row_count, 4);
+      assertEquals(series.series.samples.map((sample) => sample.row_index), [0, 3]);
 
       const rejectedManifestResponse = await rpc(port, "tools/call", {
         name: "modelica_simulation_manifest_get",
