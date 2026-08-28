@@ -41,16 +41,15 @@ mcp-syson + @casys/constraint-solver → units, margins, pass/fail/unresolved
 
 ### Recommended: run the verified container
 
-The tag-qualified `0.5.0` multi-architecture image below is the last published immutable deployment
-example. Resolve the release-index digest for `0.6.0` after that release is published; do not
-replace the digest below with a mutable tag before then:
+The published `0.6.0` multi-architecture image is pinned below by its immutable release-index
+digest. This digest, not the mutable `0.6.0` tag, is the qualified deployment identity:
 
 ```bash
 mkdir -p modelica-runs
 docker run --rm --name mcp-modelica \
   --publish 127.0.0.1:3016:3016 \
   --volume "$PWD/modelica-runs:/runs" \
-  ghcr.io/casys-ai/mcp-modelica@sha256:326ec1a46e06bec4b39bc2af130c76cfaa2088acd863a8f6d3cdb7d9e9ade692
+  ghcr.io/casys-ai/mcp-modelica@sha256:79caaa0403868d3700cda7f95bccddb4c70f65cfe871b6d42aeb094e06196a2c
 ```
 
 This image contains OpenModelica 1.27.0 and Modelica Standard Library 4.1.0. Its build gate compiles
@@ -99,7 +98,7 @@ digest; keep the evidence volume:
 mkdir -p modelica-runs
 docker run --rm -i --name mcp-modelica \
   --volume "$PWD/modelica-runs:/runs" \
-  ghcr.io/casys-ai/mcp-modelica@sha256:326ec1a46e06bec4b39bc2af130c76cfaa2088acd863a8f6d3cdb7d9e9ade692 \
+  ghcr.io/casys-ai/mcp-modelica@sha256:79caaa0403868d3700cda7f95bccddb4c70f65cfe871b6d42aeb094e06196a2c \
   --stdio
 ```
 
