@@ -49,7 +49,7 @@ mkdir -p modelica-runs
 docker run --rm --name mcp-modelica \
   --publish 127.0.0.1:3016:3016 \
   --volume "$PWD/modelica-runs:/runs" \
-  ghcr.io/casys-ai/mcp-modelica:0.5.0
+  ghcr.io/casys-ai/mcp-modelica@sha256:326ec1a46e06bec4b39bc2af130c76cfaa2088acd863a8f6d3cdb7d9e9ade692
 ```
 
 This image contains OpenModelica 1.27.0 and Modelica Standard Library 4.1.0. Its build gate compiles
@@ -98,7 +98,7 @@ digest; keep the evidence volume:
 mkdir -p modelica-runs
 docker run --rm -i --name mcp-modelica \
   --volume "$PWD/modelica-runs:/runs" \
-  ghcr.io/casys-ai/mcp-modelica:0.5.0 \
+  ghcr.io/casys-ai/mcp-modelica@sha256:326ec1a46e06bec4b39bc2af130c76cfaa2088acd863a8f6d3cdb7d9e9ade692 \
   --stdio
 ```
 
