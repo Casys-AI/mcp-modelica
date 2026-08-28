@@ -2,6 +2,16 @@
 
 All notable changes to `@casys/mcp-modelica` are documented here.
 
+## [0.6.1] - 2026-08-29
+
+### Changed
+
+- The qualified container, CI and release gates now pin Deno 2.9.6 by its verified
+  multi-architecture OCI index. The image build asserts the binary's actual Deno version before
+  caching the server.
+- MCP discovery and initialization distinguish the package release from the running Deno version;
+  solver records continue to identify only their OpenModelica/MSL engine identity.
+
 ## [0.6.0] - 2026-08-28
 
 ### Added

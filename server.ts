@@ -16,6 +16,7 @@ import { RequestStore } from "./src/storage/request-store.ts";
 import { FileRequestLockPort } from "./src/storage/request-lock.ts";
 import { FileSimulationWorkspace } from "./src/storage/simulation-workspace.ts";
 import { mapModelicaToolError } from "./src/tools/error-mapping.ts";
+import { PACKAGE_VERSION, runtimeIdentityInstructions } from "./src/release-identity.ts";
 
 const DEFAULT_HTTP_PORT = 3016;
 
@@ -48,7 +49,8 @@ export async function createModelicaServer(
     ((message: string) => console.error(`[mcp-modelica] ${message}`));
   const server = new McpApp({
     name: "mcp-modelica",
-    version: "0.6.0",
+    version: PACKAGE_VERSION,
+    instructions: runtimeIdentityInstructions(),
     maxConcurrent: 1,
     backpressureStrategy: "queue",
     transport: "stateless",
@@ -185,6 +187,7 @@ function isRemoteViewerUrl(path: string): boolean {
 if (import.meta.main) {
   const cli = parseModelicaCli(Deno.args);
   const { server } = await createModelicaServer();
+  console.error(`[mcp-modelica] ${runtimeIdentityInstructions()}`);
   if (cli.transport === "stdio") {
     await server.start();
   } else {

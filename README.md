@@ -24,7 +24,7 @@ This is not a generic Modelica or code-execution endpoint. A caller can select a
 scenario, then apply typed, bounded numeric overrides. It cannot submit a `.mo` file, a `.mos`
 script, a shell command, or a path.
 
-Stateless HTTP remains the default transport and implements protocol `2026-07-28`. Version `0.6.0`
+Stateless HTTP remains the default transport and implements protocol `2026-07-28`. Version `0.6.1`
 also provides an explicit native stdio process mode for MCP hosts that launch their server command
 directly. Its resumable flow adds a server-issued request template and bounded readback of the exact
 sealed result series.
@@ -41,8 +41,9 @@ mcp-syson + @casys/constraint-solver → units, margins, pass/fail/unresolved
 
 ### Recommended: run the verified container
 
-The published `0.6.0` multi-architecture image is pinned below by its immutable release-index
-digest. This digest, not the mutable `0.6.0` tag, is the qualified deployment identity:
+The `0.6.0` multi-architecture image below is an explicit, immutable historical deployment example.
+It is not the forthcoming `0.6.1` image: resolve every newer release's own index digest after its
+tag publishes, rather than replacing this digest with a mutable tag:
 
 ```bash
 mkdir -p modelica-runs
@@ -52,7 +53,8 @@ docker run --rm --name mcp-modelica \
   ghcr.io/casys-ai/mcp-modelica@sha256:79caaa0403868d3700cda7f95bccddb4c70f65cfe871b6d42aeb094e06196a2c
 ```
 
-This image contains OpenModelica 1.27.0 and Modelica Standard Library 4.1.0. Its build gate compiles
+This image contains OpenModelica 1.27.0 and Modelica Standard Library 4.1.0. The qualified `0.6.1`
+image pins and build-asserts Deno 2.9.6 while preserving that OMC/MSL pair. Its build gate compiles
 and runs both shipped kits before the final image is published. The MCP endpoint is
 `http://127.0.0.1:3016/mcp`; the process probe is:
 
@@ -76,7 +78,7 @@ on the host; the connection entry is typically:
 
 ### Native stdio
 
-Version `0.6.0` keeps Streamable HTTP as its default and provides an explicit local-process mode.
+Version `0.6.1` keeps Streamable HTTP as its default and provides an explicit local-process mode.
 From a checkout:
 
 ```bash
@@ -87,7 +89,7 @@ The same versioned server entry point can be launched from JSR when OpenModelica
 Standard Library 4.1.0 are available on the host:
 
 ```bash
-deno run -A jsr:@casys/mcp-modelica@0.6.0/server --stdio
+deno run -A jsr:@casys/mcp-modelica@0.6.1/server --stdio
 ```
 
 The published container entry point invokes `deno … server.ts` directly and its CMD supplies the
@@ -107,14 +109,14 @@ before.
 
 ### Run from JSR
 
-Version `0.6.0` binds kit models, scenarios, and compiler-derived schemas as ordinary generated
+Version `0.6.1` binds kit models, scenarios, and compiler-derived schemas as ordinary generated
 TypeScript modules, so a checkout-free import can load those assets. JSR users must still provide
 OpenModelica 1.27.0 and Modelica Standard Library 4.1.0. A digest-pinned GHCR image remains the
 recommended deployment because it includes that runtime and the release-gate proof that both shipped
 kits compile and run.
 
 ```bash
-deno run -A jsr:@casys/mcp-modelica@0.6.0/server --port=3016
+deno run -A jsr:@casys/mcp-modelica@0.6.1/server --port=3016
 ```
 
 A real package import from an empty working directory succeeded on the `0.4.2` release day, then
@@ -127,8 +129,8 @@ quarantine; once that quarantine expires, the flag is not required.
 
 ### Run a source checkout
 
-For local development, install Deno 2.x, OpenModelica 1.27.0, and MSL 4.1.0, then point OpenModelica
-at the library and keep run evidence in an explicit directory:
+For local development, install Deno 2.9.6, OpenModelica 1.27.0, and MSL 4.1.0, then point
+OpenModelica at the library and keep run evidence in an explicit directory:
 
 ```bash
 git clone https://github.com/Casys-AI/mcp-modelica.git
@@ -360,7 +362,7 @@ resource bootstrap is published.
 
 ## Development
 
-Version 0.6.0 keeps the explicit `--stdio` process path above while retaining HTTP as the default;
+Version 0.6.1 keeps the explicit `--stdio` process path above while retaining HTTP as the default;
 the container stdio command replaces its HTTP CMD with `--stdio`.
 
 ```bash

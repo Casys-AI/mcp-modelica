@@ -1,8 +1,10 @@
 import { spawn, spawnSync } from "node:child_process";
 
-const [image, expectedVersion] = process.argv.slice(2);
+const [image, expectedVersion, expectedDenoVersion] = process.argv.slice(2);
 if (!image) {
-  throw new Error("usage: smoke-container-stdio.mjs <image> [expected-version]");
+  throw new Error(
+    "usage: smoke-container-stdio.mjs <image> [expected-version] [expected-deno-version]",
+  );
 }
 
 const PROTOCOL_VERSION = "2026-07-28";
@@ -28,6 +30,9 @@ try {
     [PROTOCOL_VERSION],
     "supported protocol versions",
   );
+  if (expectedDenoVersion) {
+    expectRuntimeIdentity(discovered.result, expectedDenoVersion, "server/discover");
+  }
 
   const initialized = await server.request(request(2, "initialize", {
     protocolVersion: LEGACY_PROTOCOL_VERSION,
@@ -41,6 +46,9 @@ try {
   );
   if (expectedVersion) {
     expectEqual(initialized.result?.serverInfo?.version, expectedVersion, "server version");
+  }
+  if (expectedDenoVersion) {
+    expectRuntimeIdentity(initialized.result, expectedDenoVersion, "initialize");
   }
   await server.send({ jsonrpc: "2.0", method: "notifications/initialized" });
 
@@ -284,6 +292,14 @@ function modernRequest(id, method, params = {}) {
 
 function expect(value, message) {
   if (!value) throw new Error(message);
+}
+
+function expectRuntimeIdentity(result, expectedDenoVersion, method) {
+  const expected = `Runtime identity: Deno ${expectedDenoVersion}.`;
+  expect(
+    typeof result?.instructions === "string" && result.instructions.includes(expected),
+    `${method} did not report ${expected}`,
+  );
 }
 
 function expectEqual(actual, expected, label) {

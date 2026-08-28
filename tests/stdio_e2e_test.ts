@@ -1,5 +1,6 @@
 import { assert, assertEquals, assertExists } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
+import { runtimeIdentityInstructions } from "../src/release-identity.ts";
 
 const FIXTURE = fromFileUrl(new URL("./fixtures/stdio_server.ts", import.meta.url));
 const REPOSITORY = fromFileUrl(new URL("..", import.meta.url));
@@ -33,6 +34,7 @@ Deno.test("stdio accepts legacy initialize and serves qualified resources", asyn
       clientInfo: { name: "modelica-legacy-test", version: "1.0.0" },
     }));
     assertEquals(initialized.result?.protocolVersion, LEGACY_PROTOCOL_VERSION);
+    assertEquals(initialized.result?.instructions, runtimeIdentityInstructions());
     await process.notify({ jsonrpc: "2.0", method: "notifications/initialized" });
 
     const listed = await process.request(request(2, "resources/list"));
@@ -55,6 +57,7 @@ Deno.test("stdio modern flow publishes and reads dynamic recorded evidence", asy
   try {
     const discovered = await process.request(modernRequest(1, "server/discover"));
     assertEquals(discovered.result?.supportedVersions, [PROTOCOL_VERSION]);
+    assertEquals(discovered.result?.instructions, runtimeIdentityInstructions());
 
     const viewer = await process.request(
       modernRequest(2, "resources/read", { uri: VIEWER_URI }),
@@ -165,6 +168,7 @@ Deno.test({
     try {
       const discovered = await process.request(modernRequest(1, "server/discover"));
       assertEquals(discovered.result?.supportedVersions, [PROTOCOL_VERSION]);
+      assertEquals(discovered.result?.instructions, runtimeIdentityInstructions());
 
       const initialized = await process.request(request(2, "initialize", {
         protocolVersion: LEGACY_PROTOCOL_VERSION,

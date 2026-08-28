@@ -21,12 +21,16 @@ RUN mkdir -p /opt/modelica-libraries \
       -C /opt/modelica-libraries \
     && rm /tmp/modelica-standard-library.tar.gz
 
-COPY --from=denoland/deno@sha256:25675bd2a125b59bdcfbb6592ec5c332a2bc56e0dabf038184d8b2c6aec45c3b /deno /usr/local/bin/deno
+# Deno 2.9.6 OCI index: sha256:4cf0029b9aeeeed5efcbb71828737f0d7c8c8a20072df960e51a5679ef0d21ba
+# linux/amd64: sha256:456e1a0fada18d727c3f38eb4937218c1b46924c832b713dcf9358eb32ff15a6
+# linux/arm64: sha256:3257165d117f787441e08ad0981f916969423220bdb4550c9fcdecc21ab6551f
+COPY --from=denoland/deno@sha256:4cf0029b9aeeeed5efcbb71828737f0d7c8c8a20072df960e51a5679ef0d21ba /deno /usr/local/bin/deno
 WORKDIR /app
 COPY deno.json deno.lock mod.ts server.ts ./
 COPY src ./src
 COPY models ./models
 COPY scenarios ./scenarios
+RUN deno eval --frozen 'import { assertQualifiedContainerDenoRuntime } from "./src/release-identity.ts"; assertQualifiedContainerDenoRuntime()'
 RUN deno cache --frozen server.ts
 
 # OMC deliberately reads OPENMODELICALIBRARY rather than MODELICAPATH.

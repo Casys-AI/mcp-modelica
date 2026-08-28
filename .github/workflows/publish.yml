@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
         with:
-          deno-version: v2.9.2
+          deno-version: v2.9.6
       - name: Confirm tag matches package version
         env:
           TAG_NAME: ${{ github.ref_name }}
@@ -35,10 +35,10 @@ jobs:
       - name: Verify the HTTP runtime entrypoint
         run: >-
           bash scripts/smoke-container-http.sh mcp-modelica:runtime-check
-          "$(node -p 'require(\"./deno.json\").version')"
+          "$(node -p 'require(\"./deno.json\").version')" 2.9.6
       - name: Verify the native stdio runtime entrypoint
         run: >-
           node scripts/smoke-container-stdio.mjs mcp-modelica:runtime-check
-          "$(node -p 'require(\"./deno.json\").version')"
+          "$(node -p 'require(\"./deno.json\").version')" 2.9.6
       - name: Publish package and provenance
         run: deno publish

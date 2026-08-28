@@ -1,15 +1,33 @@
-import { assert, assertMatch } from "@std/assert";
+import { assert, assertEquals, assertMatch } from "@std/assert";
+import { PACKAGE_VERSION, QUALIFIED_CONTAINER_DENO_VERSION } from "../src/release-identity.ts";
+
+const DENO_2_9_6_INDEX_DIGEST =
+  "sha256:4cf0029b9aeeeed5efcbb71828737f0d7c8c8a20072df960e51a5679ef0d21ba";
+const DENO_2_9_6_AMD64_DIGEST =
+  "sha256:456e1a0fada18d727c3f38eb4937218c1b46924c832b713dcf9358eb32ff15a6";
+const DENO_2_9_6_ARM64_DIGEST =
+  "sha256:3257165d117f787441e08ad0981f916969423220bdb4550c9fcdecc21ab6551f";
 
 Deno.test("Docker release inputs are immutable and verified", async () => {
   const packageVersion = (JSON.parse(
     await Deno.readTextFile(new URL("../deno.json", import.meta.url)),
   ) as { version: string }).version;
+  assertEquals(PACKAGE_VERSION, packageVersion);
+  assertEquals(QUALIFIED_CONTAINER_DENO_VERSION, "2.9.6");
   const citation = await Deno.readTextFile(new URL("../CITATION.cff", import.meta.url));
   const server = await Deno.readTextFile(new URL("../server.ts", import.meta.url));
+  const readme = await Deno.readTextFile(new URL("../README.md", import.meta.url));
   assertMatch(citation, new RegExp(`^version: ${packageVersion.replace(".", "\\.")}$`, "m"));
   assert(
-    server.includes(`version: "${packageVersion}"`),
-    "The MCP server identity must agree with the published package version.",
+    server.includes("version: PACKAGE_VERSION") &&
+      server.includes("instructions: runtimeIdentityInstructions()"),
+    "Discovery must distinguish the package release identity from the actual Deno runtime identity.",
+  );
+  assert(
+    readme.includes(
+      "For local development, install Deno 2.9.6, OpenModelica 1.27.0, and MSL 4.1.0",
+    ),
+    "Local development documentation must name the exact qualified Deno runtime release.",
   );
   const dockerfile = await Deno.readTextFile(new URL("../Dockerfile", import.meta.url));
   const omcIntegration = await Deno.readTextFile(
@@ -21,6 +39,9 @@ Deno.test("Docker release inputs are immutable and verified", async () => {
   const publishWorkflow = await Deno.readTextFile(
     new URL("../.github/workflows/publish-image.yml", import.meta.url),
   );
+  const publishJsrWorkflow = await Deno.readTextFile(
+    new URL("../.github/workflows/publish.yml", import.meta.url),
+  );
 
   assertMatch(
     dockerfile,
@@ -28,7 +49,16 @@ Deno.test("Docker release inputs are immutable and verified", async () => {
   );
   assertMatch(
     dockerfile,
-    /COPY --from=denoland\/deno@sha256:[a-f0-9]{64} \/deno \/usr\/local\/bin\/deno/,
+    new RegExp(
+      `COPY --from=denoland/deno@${DENO_2_9_6_INDEX_DIGEST} /deno /usr/local/bin/deno`,
+    ),
+  );
+  assert(
+    dockerfile.includes(`Deno 2.9.6 OCI index: ${DENO_2_9_6_INDEX_DIGEST}`) &&
+      dockerfile.includes(`linux/amd64: ${DENO_2_9_6_AMD64_DIGEST}`) &&
+      dockerfile.includes(`linux/arm64: ${DENO_2_9_6_ARM64_DIGEST}`) &&
+      dockerfile.includes("assertQualifiedContainerDenoRuntime()"),
+    "The exact multi-architecture Deno source and its actual runtime assertion must be release inputs.",
   );
   assert(
     dockerfile.includes("RUN deno cache --frozen server.ts"),
@@ -92,6 +122,8 @@ Deno.test("Docker release inputs are immutable and verified", async () => {
   assert(
     checkWorkflow.includes("runs-on: ubuntu-24.04") &&
       checkWorkflow.includes("runs-on: ubuntu-24.04-arm") &&
+      checkWorkflow.includes("deno-version: v2.9.6") &&
+      checkWorkflow.includes("2.9.6") &&
       checkWorkflow.includes('test "$(uname -m)" = x86_64') &&
       checkWorkflow.includes('test "$(uname -m)" = aarch64') &&
       !checkWorkflow.includes("setup-qemu-action") && !checkWorkflow.includes("buildx build"),
@@ -99,6 +131,8 @@ Deno.test("Docker release inputs are immutable and verified", async () => {
   );
   assert(
     publishWorkflow.includes('tags: ["v*"]') &&
+      publishWorkflow.includes("deno-version: v2.9.6") &&
+      publishWorkflow.includes("io.casys.mcp-modelica.deno-version=2.9.6") &&
       !publishWorkflow.includes("workflow_dispatch") &&
       publishWorkflow.includes("needs: release-gate") &&
       publishWorkflow.includes("deno publish --dry-run") &&
@@ -116,5 +150,11 @@ Deno.test("Docker release inputs are immutable and verified", async () => {
       publishWorkflow.includes("registry: ghcr.io") &&
       publishWorkflow.includes("packages: write") && publishWorkflow.includes("id-token: write"),
     "Tag releases must gate the JSR archive and distribute signed native multi-architecture GHCR images.",
+  );
+  assert(
+    publishJsrWorkflow.includes("deno-version: v2.9.6") &&
+      publishJsrWorkflow.includes("smoke-container-http.sh") &&
+      publishJsrWorkflow.includes("2.9.6"),
+    "The JSR release gate must use and verify the same qualified Deno runtime identity.",
   );
 });

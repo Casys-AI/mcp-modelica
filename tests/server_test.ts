@@ -6,6 +6,7 @@ import {
   createResultsViewerFileSystem,
   parseModelicaCli,
 } from "../server.ts";
+import { PACKAGE_VERSION, runtimeIdentityInstructions } from "../src/release-identity.ts";
 import { createModelicaService } from "../src/domain/service.ts";
 import { ValidationError } from "../src/domain/errors.ts";
 import { stableJson } from "../src/domain/hashing.ts";
@@ -16,10 +17,6 @@ import {
   ModelicaEvidenceResources,
 } from "../src/resources/modelica-evidence-resources.ts";
 import { FakeRunner, installLegacyRunFixture, LEGACY_RUN_ID } from "./test-helpers.ts";
-
-const PACKAGE_VERSION = (JSON.parse(
-  await Deno.readTextFile(new URL("../deno.json", import.meta.url)),
-) as { version: string }).version;
 
 Deno.test("CLI keeps HTTP as default and makes stdio explicit", () => {
   assertEquals(parseModelicaCli([]), {
@@ -226,6 +223,18 @@ Deno.test("HTTP MCP wire exposes result viewer metadata and structured simulatio
         name: "mcp-modelica",
         version: PACKAGE_VERSION,
       });
+      assertEquals(discovered.result.instructions, runtimeIdentityInstructions());
+      const initialized = await rpc(port, "initialize", {
+        protocolVersion: "2026-07-28",
+        capabilities: {},
+        clientInfo: { name: "modelica-http-test", version: "1.0.0" },
+      });
+      assertEquals(initialized.result.protocolVersion, "2026-07-28");
+      assertEquals(initialized.result.serverInfo, {
+        name: "mcp-modelica",
+        version: PACKAGE_VERSION,
+      });
+      assertEquals(initialized.result.instructions, runtimeIdentityInstructions());
       const listed = await rpc(port, "tools/list", {});
       const tools = listed.result.tools as Array<Record<string, unknown>>;
       assertEquals(tools.map((tool) => tool.name).sort(), [
@@ -1024,6 +1033,7 @@ async function rpc(
   port: number,
   method:
     | "server/discover"
+    | "initialize"
     | "tools/list"
     | "tools/call"
     | "resources/list"

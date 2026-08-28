@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
         with:
-          deno-version: v2.9.2
+          deno-version: v2.9.6
       - name: Confirm exact tag matches package version
         env:
           TAG_NAME: ${{ github.ref_name }}
@@ -34,8 +34,8 @@ jobs:
         run: |
           test "$(uname -m)" = x86_64
           docker build --target final --tag mcp-modelica:release-check .
-          bash scripts/smoke-container-http.sh mcp-modelica:release-check "$(node -p 'require("./deno.json").version')"
-          node scripts/smoke-container-stdio.mjs mcp-modelica:release-check "$(node -p 'require("./deno.json").version')"
+          bash scripts/smoke-container-http.sh mcp-modelica:release-check "$(node -p 'require("./deno.json").version')" 2.9.6
+          node scripts/smoke-container-stdio.mjs mcp-modelica:release-check "$(node -p 'require("./deno.json").version')" 2.9.6
 
   publish:
     needs: release-gate
@@ -63,6 +63,7 @@ jobs:
         org.opencontainers.image.title=mcp-modelica
         org.opencontainers.image.description=Approved OpenModelica MCP simulation sidecar
         org.opencontainers.image.licenses=MIT
+        io.casys.mcp-modelica.deno-version=2.9.6
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
       registry-auths: |
