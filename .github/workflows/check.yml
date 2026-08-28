@@ -33,6 +33,10 @@ jobs:
         run: >-
           bash scripts/smoke-container-http.sh mcp-modelica:runtime-check
           "$(node -p 'require("./deno.json").version')"
+      - name: Smoke the native AMD64 stdio runtime
+        run: >-
+          node scripts/smoke-container-stdio.mjs mcp-modelica:runtime-check
+          "$(node -p 'require("./deno.json").version')"
 
   openmodelica-arm64:
     runs-on: ubuntu-24.04-arm
@@ -45,4 +49,8 @@ jobs:
       - name: Smoke the native ARM64 HTTP runtime
         run: >-
           bash scripts/smoke-container-http.sh mcp-modelica:runtime-check
+          "$(node -p 'require("./deno.json").version')"
+      - name: Smoke the native ARM64 stdio runtime
+        run: >-
+          node scripts/smoke-container-stdio.mjs mcp-modelica:runtime-check
           "$(node -p 'require("./deno.json").version')"

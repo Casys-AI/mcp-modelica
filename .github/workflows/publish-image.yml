@@ -35,6 +35,7 @@ jobs:
           test "$(uname -m)" = x86_64
           docker build --target final --tag mcp-modelica:release-check .
           bash scripts/smoke-container-http.sh mcp-modelica:release-check "$(node -p 'require("./deno.json").version')"
+          node scripts/smoke-container-stdio.mjs mcp-modelica:release-check "$(node -p 'require("./deno.json").version')"
 
   publish:
     needs: release-gate

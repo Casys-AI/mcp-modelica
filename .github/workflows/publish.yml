@@ -30,11 +30,15 @@ jobs:
           deno task fmt
           deno task lint
           deno task test
-      - name: Build and verify the HTTP runtime image
+      - name: Build and verify the runtime image
         run: docker build --target final --tag mcp-modelica:runtime-check .
       - name: Verify the HTTP runtime entrypoint
         run: >-
           bash scripts/smoke-container-http.sh mcp-modelica:runtime-check
+          "$(node -p 'require(\"./deno.json\").version')"
+      - name: Verify the native stdio runtime entrypoint
+        run: >-
+          node scripts/smoke-container-stdio.mjs mcp-modelica:runtime-check
           "$(node -p 'require(\"./deno.json\").version')"
       - name: Publish package and provenance
         run: deno publish
