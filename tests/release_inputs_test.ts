@@ -1,6 +1,16 @@
 import { assert, assertMatch } from "@std/assert";
 
 Deno.test("Docker release inputs are immutable and verified", async () => {
+  const packageVersion = (JSON.parse(
+    await Deno.readTextFile(new URL("../deno.json", import.meta.url)),
+  ) as { version: string }).version;
+  const citation = await Deno.readTextFile(new URL("../CITATION.cff", import.meta.url));
+  const server = await Deno.readTextFile(new URL("../server.ts", import.meta.url));
+  assertMatch(citation, new RegExp(`^version: ${packageVersion.replace(".", "\\.")}$`, "m"));
+  assert(
+    server.includes(`version: "${packageVersion}"`),
+    "The MCP server identity must agree with the published package version.",
+  );
   const dockerfile = await Deno.readTextFile(new URL("../Dockerfile", import.meta.url));
   const omcIntegration = await Deno.readTextFile(
     new URL("./omc_integration_test.ts", import.meta.url),

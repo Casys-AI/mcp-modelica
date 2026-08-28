@@ -68,6 +68,16 @@ export class ModelicaService {
     return this.requireQualifiedKit(modelId, version);
   }
 
+  /**
+   * Internal startup-only projection for MCP input-schema generation.
+   *
+   * This does not expose a new tool or let a caller select source, paths,
+   * scripts, solvers, or runtimes; it returns only the loaded KitRegistry.
+   */
+  listQualifiedKitsForInputSchema(): readonly ModelicaKit[] {
+    return this.registry.list();
+  }
+
   /** Exact code resolver used to replay a sealed 2.1 normalizer identity. */
   resolveResultNormalizer(id: string, version: string): SimulationResultNormalizer {
     return this.registry.resolveResultNormalizer(id, version);

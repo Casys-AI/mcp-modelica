@@ -9,18 +9,13 @@ import {
   toSimulationRequestResult,
   toSimulationRequestTemplateResult,
 } from "./resumable-results.ts";
+import { createModelicaKitInputSchemas } from "./kit-input-schemas.ts";
 import type { ModelicaTool } from "./types.ts";
-
-const quantitySchema = {
-  type: "object",
-  additionalProperties: false,
-  properties: { value: { type: "number" }, unit: { type: "string", minLength: 1 } },
-  required: ["value", "unit"],
-};
 
 export function createResumableSimulationTools(
   service: ResumableSimulationService,
 ): ModelicaTool[] {
+  const schemas = createModelicaKitInputSchemas(service.listQualifiedKitsForInputSchema());
   return [
     {
       name: "modelica_simulation_manifest_get",
@@ -29,16 +24,7 @@ export function createResumableSimulationTools(
         "The manifest is required before resumable submission.",
       category: "catalog",
       outputSchema: simulationManifestOutputSchema,
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          model_id: { type: "string", minLength: 1 },
-          model_version: { type: "string", minLength: 1 },
-          scenario_id: { type: "string", minLength: 1 },
-        },
-        required: ["model_id", "model_version", "scenario_id"],
-      },
+      inputSchema: schemas.manifest,
       handler: async (args) => toSimulationManifestResult(await service.getManifest(args)),
     },
     {
@@ -49,22 +35,7 @@ export function createResumableSimulationTools(
         "no additional runtime probe and creates no durable state or simulation.",
       category: "catalog",
       outputSchema: simulationRequestTemplateOutputSchema,
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          request_id: {
-            type: "string",
-            pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
-          },
-          manifest_sha256: { type: "string", pattern: "^[0-9a-f]{64}$" },
-          model_id: { type: "string", minLength: 1 },
-          model_version: { type: "string", minLength: 1 },
-          scenario_id: { type: "string", minLength: 1 },
-          timeout_ms: { type: "integer", minimum: 1, maximum: 120000 },
-        },
-        required: ["request_id", "manifest_sha256", "model_id", "model_version", "scenario_id"],
-      },
+      inputSchema: schemas.requestTemplate,
       handler: async (args) =>
         toSimulationRequestTemplateResult(
           await service.getRequestTemplate(args),
@@ -77,31 +48,7 @@ export function createResumableSimulationTools(
         "The same request_id and canonical bytes resolve to the same run; changed bytes are refused.",
       category: "simulation",
       outputSchema: simulationRequestOutputSchema,
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          request_id: {
-            type: "string",
-            pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
-          },
-          manifest_sha256: { type: "string", pattern: "^[0-9a-f]{64}$" },
-          model_id: { type: "string", minLength: 1 },
-          model_version: { type: "string", minLength: 1 },
-          scenario_id: { type: "string", minLength: 1 },
-          parameters: { type: "object", additionalProperties: quantitySchema },
-          timeout_ms: { type: "integer", minimum: 1, maximum: 120000 },
-        },
-        required: [
-          "request_id",
-          "manifest_sha256",
-          "model_id",
-          "model_version",
-          "scenario_id",
-          "parameters",
-          "timeout_ms",
-        ],
-      },
+      inputSchema: schemas.submit,
       handler: async (args) => toSimulationRequestResult(await service.submit(args)),
     },
     {

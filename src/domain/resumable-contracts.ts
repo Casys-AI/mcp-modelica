@@ -156,6 +156,8 @@ export interface SimulationRequestStorePort {
 }
 
 export interface QualifiedSimulationMethodPort {
+  /** Startup-only registry projection used to derive closed MCP input schemas. */
+  listQualifiedKitsForInputSchema(): readonly ModelicaKit[];
   getQualifiedKit(modelId: unknown, version: unknown): ModelicaKit;
   resolveResultNormalizer(id: string, version: string): SimulationResultNormalizer;
   getRuntimeEngineIdentity(): Promise<EngineIdentity>;

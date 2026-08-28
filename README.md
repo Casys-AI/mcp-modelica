@@ -24,7 +24,7 @@ This is not a generic Modelica or code-execution endpoint. A caller can select a
 scenario, then apply typed, bounded numeric overrides. It cannot submit a `.mo` file, a `.mos`
 script, a shell command, or a path.
 
-Stateless HTTP remains the default transport and implements protocol `2026-07-28`. Version `0.5.0`
+Stateless HTTP remains the default transport and implements protocol `2026-07-28`. Version `0.6.0`
 also provides an explicit native stdio process mode for MCP hosts that launch their server command
 directly. Its resumable flow adds a server-issued request template and bounded readback of the exact
 sealed result series.
@@ -41,8 +41,9 @@ mcp-syson + @casys/constraint-solver → units, margins, pass/fail/unresolved
 
 ### Recommended: run the verified container
 
-The tag-qualified `0.5.0` multi-architecture image supports Linux AMD64 and ARM64. Resolve its
-release-index digest and use that immutable identity for deployment:
+The tag-qualified `0.5.0` multi-architecture image below is the last published immutable deployment
+example. Resolve the release-index digest for `0.6.0` after that release is published; do not
+replace the digest below with a mutable tag before then:
 
 ```bash
 mkdir -p modelica-runs
@@ -76,7 +77,7 @@ on the host; the connection entry is typically:
 
 ### Native stdio
 
-Version `0.5.0` keeps Streamable HTTP as its default and provides an explicit local-process mode.
+Version `0.6.0` keeps Streamable HTTP as its default and provides an explicit local-process mode.
 From a checkout:
 
 ```bash
@@ -87,7 +88,7 @@ The same versioned server entry point can be launched from JSR when OpenModelica
 Standard Library 4.1.0 are available on the host:
 
 ```bash
-deno run -A jsr:@casys/mcp-modelica@0.5.0/server --stdio
+deno run -A jsr:@casys/mcp-modelica@0.6.0/server --stdio
 ```
 
 The published container entry point invokes `deno … server.ts` directly and its CMD supplies the
@@ -107,14 +108,14 @@ before.
 
 ### Run from JSR
 
-Version `0.5.0` binds kit models, scenarios, and compiler-derived schemas as ordinary generated
+Version `0.6.0` binds kit models, scenarios, and compiler-derived schemas as ordinary generated
 TypeScript modules, so a checkout-free import can load those assets. JSR users must still provide
 OpenModelica 1.27.0 and Modelica Standard Library 4.1.0. A digest-pinned GHCR image remains the
 recommended deployment because it includes that runtime and the release-gate proof that both shipped
 kits compile and run.
 
 ```bash
-deno run -A jsr:@casys/mcp-modelica@0.5.0/server --port=3016
+deno run -A jsr:@casys/mcp-modelica@0.6.0/server --port=3016
 ```
 
 A real package import from an empty working directory succeeded on the `0.4.2` release day, then
@@ -141,8 +142,9 @@ MODELICA_RUN_DIR="$PWD/runs" \
 ### First useful call
 
 For a new integration, call `modelica_kit_list_recorded` first. It returns the model and scenario
-ids, units, defaults, accepted bounds, produced metrics, and exact evidence resource identities.
-Then call `modelica_simulate_recorded` with only the overrides you need:
+ids, units, defaults, accepted bounds, and produced metrics. It does **not** return resource
+identities: use the exact resource forms documented below and discover their registered instances
+via `resources/list`. Then call `modelica_simulate_recorded` with only the overrides you need:
 
 ```json
 {
@@ -197,6 +199,13 @@ ledgers.
 | `modelica_run_list` | `modelica_run_list_recorded` | Read a bounded deterministic persisted-run index.               |
 | `modelica_run_get`  | `modelica_run_get_recorded`  | Retrieve one immutable persisted record.                        |
 
+The simulation and resumable selection schemas are generated at startup from the loaded qualified
+kit registry. Their `oneOf` branches enumerate only registered kit/version/scenario combinations;
+their parameter maps are closed and declare numeric type, reviewed bounds, exact unit and
+`x-modelica-default` planning metadata. This metadata is intentionally non-mutating: it never
+supplies a caller value. In particular, 2.1 submission still requires every parameter value and unit
+explicitly.
+
 ### Resumable 2.1 successor
 
 | Tool                                       | Role                                                                     |
@@ -239,6 +248,15 @@ column catalogue, numeric minimum/maximum/final values, and deterministic evenly
 including the endpoints. The reader never accepts a file path, resource URI, Modelica source,
 script, or solver selection. It reports CSV numbers as raw solver columns and does not invent units
 or a requirement verdict.
+
+### Stable tool errors
+
+Business validation failures are MCP `isError: true` results whose text content is canonical JSON
+with schema `modelica-mcp-error/1.0`. Every record contains `code`, `field`, `context` and
+`recovery`; these fields are for agent control flow and contain no source text, paths or raw solver
+diagnostics. A missing process-local 2.1 issuance is `manifest.reissue_required`, directing the
+caller to obtain a fresh manifest from that same server process. Unexpected execution faults remain
+protocol errors rather than being relabelled as a safe business rejection.
 
 Completed replay treats the manifest's OMC/MSL identity as historical evidence: it does not compare
 it to or probe the current image. It instead verifies the sealed manifest, exact copied source
@@ -343,7 +361,7 @@ resource bootstrap is published.
 
 ## Development
 
-Version 0.5.0 keeps the explicit `--stdio` process path above while retaining HTTP as the default;
+Version 0.6.0 keeps the explicit `--stdio` process path above while retaining HTTP as the default;
 the container stdio command replaces its HTTP CMD with `--stdio`.
 
 ```bash

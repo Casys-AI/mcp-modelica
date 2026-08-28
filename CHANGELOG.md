@@ -2,6 +2,23 @@
 
 All notable changes to `@casys/mcp-modelica` are documented here.
 
+## [0.6.0] - 2026-08-28
+
+### Added
+
+- Generated closed MCP input schemas from the loaded qualified kit registry. They enumerate only
+  registered kit/version/scenario branches and reviewed parameter type, unit, bounds and planning
+  defaults; 2.1 submission still requires every quantity explicitly.
+- Stable `modelica-mcp-error/1.0` business-error records with machine-readable code, field, bounded
+  context and recovery guidance.
+
+### Changed
+
+- OpenModelica execution now accepts only the generated `result_res.csv`; a neighbouring CSV can
+  never become sealed evidence.
+- Corrected the recorded kit-list documentation: exact resource identities are discovered through
+  MCP resources, not returned by that tool's historical response shape.
+
 ## [0.5.0] - 2026-08-28
 
 ### Added

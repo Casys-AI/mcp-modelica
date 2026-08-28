@@ -11,9 +11,11 @@ import {
   toKitListResult,
   toRecordedKitListResult,
 } from "./results.ts";
+import { createModelicaKitInputSchemas } from "./kit-input-schemas.ts";
 import type { ModelicaTool } from "./types.ts";
 
 export function createModelicaTools(service: ModelicaService): ModelicaTool[] {
+  const schemas = createModelicaKitInputSchemas(service.listQualifiedKitsForInputSchema());
   return [
     {
       name: "modelica_kit_list",
@@ -38,28 +40,7 @@ export function createModelicaTools(service: ModelicaService): ModelicaTool[] {
       category: "simulation",
       outputSchema: runOutputSchema,
       _meta: { ui: { resourceUri: MODELICA_RESULTS_VIEWER_URI } },
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          model_id: { type: "string", minLength: 1 },
-          scenario_id: { type: "string", minLength: 1 },
-          parameter_overrides: {
-            type: "object",
-            additionalProperties: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                value: { type: "number" },
-                unit: { type: "string", minLength: 1 },
-              },
-              required: ["value", "unit"],
-            },
-          },
-          timeout_ms: { type: "integer", minimum: 1, maximum: 120000 },
-        },
-        required: ["model_id", "scenario_id"],
-      },
+      inputSchema: schemas.simulate,
       handler: async (args) => await service.simulate(args),
     },
     {
@@ -120,28 +101,7 @@ export function createModelicaTools(service: ModelicaService): ModelicaTool[] {
       category: "simulation",
       outputSchema: recordedRunOutputSchema,
       _meta: { ui: { resourceUri: MODELICA_RESULTS_VIEWER_URI } },
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          model_id: { type: "string", minLength: 1 },
-          scenario_id: { type: "string", minLength: 1 },
-          parameter_overrides: {
-            type: "object",
-            additionalProperties: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                value: { type: "number" },
-                unit: { type: "string", minLength: 1 },
-              },
-              required: ["value", "unit"],
-            },
-          },
-          timeout_ms: { type: "integer", minimum: 1, maximum: 120000 },
-        },
-        required: ["model_id", "scenario_id"],
-      },
+      inputSchema: schemas.simulate,
       handler: async (args) => await service.simulate(args),
     },
     {

@@ -15,6 +15,7 @@ import { ResumableEvidenceResources } from "./src/resources/resumable-evidence-r
 import { RequestStore } from "./src/storage/request-store.ts";
 import { FileRequestLockPort } from "./src/storage/request-lock.ts";
 import { FileSimulationWorkspace } from "./src/storage/simulation-workspace.ts";
+import { mapModelicaToolError } from "./src/tools/error-mapping.ts";
 
 const DEFAULT_HTTP_PORT = 3016;
 
@@ -47,11 +48,12 @@ export async function createModelicaServer(
     ((message: string) => console.error(`[mcp-modelica] ${message}`));
   const server = new McpApp({
     name: "mcp-modelica",
-    version: "0.5.0",
+    version: "0.6.0",
     maxConcurrent: 1,
     backpressureStrategy: "queue",
     transport: "stateless",
     validateSchema: true,
+    toolErrorMapper: mapModelicaToolError,
     // Runs are created after either transport starts. Predeclare resources so
     // their exact evidence can be registered safely afterwards.
     expectResources: true,

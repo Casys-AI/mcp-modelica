@@ -90,6 +90,11 @@ export class ResumableSimulationService {
     private readonly workspace: SimulationWorkspacePort,
   ) {}
 
+  /** Internal startup-only registry projection for the paired MCP adapter. */
+  listQualifiedKitsForInputSchema(): readonly ModelicaKit[] {
+    return this.method.listQualifiedKitsForInputSchema();
+  }
+
   async getManifest(rawInput: unknown): Promise<SimulationManifest> {
     const identity = parseManifestIdentityInput(rawInput);
     const manifest = await this.buildManifest(
@@ -118,6 +123,17 @@ export class ResumableSimulationService {
         "manifest_sha256 must match the manifest most recently issued by " +
           "modelica_simulation_manifest_get for this model, version, and scenario in this " +
           "server process. Call that operation first and pass its exact digest.",
+        {
+          code: "manifest.reissue_required",
+          field: "manifest_sha256",
+          context: {
+            model_id: input.model_id,
+            model_version: input.model_version,
+            scenario_id: input.scenario_id,
+          },
+          recovery:
+            "Call modelica_simulation_manifest_get again on this server process, then use its exact manifest_sha256.",
+        },
       );
     }
     const kit = this.method.getQualifiedKit(input.model_id, input.model_version);

@@ -129,14 +129,18 @@ export class OpenModelicaRunner implements SimulationRunner {
 }
 
 async function readResultCsv(runDirectory: string): Promise<string | undefined> {
-  const candidates: string[] = [];
-  for await (const entry of Deno.readDir(runDirectory)) {
-    if (entry.isFile && entry.name.endsWith(".csv")) candidates.push(entry.name);
+  // The generated script names the OMC prefix "result", for which OMC's CSV
+  // output is exactly result_res.csv. Never select a neighbouring CSV: it may
+  // be a stale or unrelated file and must not become sealed simulation evidence.
+  const path = join(runDirectory, "result_res.csv");
+  let metadata: Deno.FileInfo;
+  try {
+    metadata = await Deno.stat(path);
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return undefined;
+    throw error;
   }
-  if (candidates.length === 0) return undefined;
-  const preferred = candidates.find((name) => name === "result_res.csv") ?? candidates.sort()[0];
-  const path = join(runDirectory, preferred);
-  const metadata = await Deno.stat(path);
+  if (!metadata.isFile) return undefined;
   if (metadata.size > MAX_RESULT_CSV_BYTES) {
     throw new Error(
       `OpenModelica result CSV exceeds the ${MAX_RESULT_CSV_BYTES} byte safety limit.`,

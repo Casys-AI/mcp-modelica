@@ -285,9 +285,13 @@ Deno.test("HTTP MCP wire exposes result viewer metadata and structured simulatio
         assertEquals(output.additionalProperties, false);
         assertEquals(output.properties?.schemaVersion?.const, "2.1");
       }
+      const submitBranches = (submitTool?.inputSchema as { oneOf?: Array<unknown> }).oneOf;
+      assertEquals(Array.isArray(submitBranches), true);
       assertEquals(
-        (submitTool?.inputSchema as { additionalProperties?: boolean }).additionalProperties,
-        false,
+        submitBranches?.every((branch) =>
+          (branch as { additionalProperties?: boolean }).additionalProperties === false
+        ),
+        true,
       );
 
       const simulated = await rpc(port, "tools/call", {
@@ -450,6 +454,84 @@ Deno.test("HTTP MCP wire exposes result viewer metadata and structured simulatio
         arguments: { request_id: rejectedInput.request_id },
       });
       assertEquals(rejectedAgain.result.structuredContent, rejectedContent);
+    } finally {
+      await http.shutdown();
+    }
+  } finally {
+    await Deno.remove(directory, { recursive: true });
+  }
+});
+
+Deno.test("MCP tool failures expose stable bounded error fields", async () => {
+  const directory = await Deno.makeTempDir({ prefix: "mcp-modelica-wire-errors-" });
+  const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
+  const port = (listener.addr as Deno.NetAddr).port;
+  listener.close();
+  try {
+    const service = await createModelicaService({
+      runsDirectory: directory,
+      runner: new FakeRunner(),
+    });
+    const { server } = await createModelicaServer({
+      service,
+      logger: () => {},
+      viewerFileSystem: { exists: () => false, readFile: () => "unreachable" },
+    });
+    const http = await server.startHttp({ port, hostname: "127.0.0.1", onListen: () => {} });
+    try {
+      const reissue = await rpc(port, "tools/call", {
+        name: "modelica_simulation_request_template_get",
+        arguments: {
+          request_id: "missing-issued-manifest",
+          manifest_sha256: "0".repeat(64),
+          model_id: "coffee-machine-v1",
+          model_version: "0.1.0",
+          scenario_id: "heat-up-nominal",
+        },
+      });
+      const reissueResult = reissue.result as {
+        isError: boolean;
+        content: Array<{ text: string }>;
+      };
+      assertEquals(reissueResult.isError, true);
+      assertEquals(JSON.parse(reissueResult.content[0].text), {
+        schema: "modelica-mcp-error/1.0",
+        code: "manifest.reissue_required",
+        message: "manifest_sha256 must match the manifest most recently issued by " +
+          "modelica_simulation_manifest_get for this model, version, and scenario in this " +
+          "server process. Call that operation first and pass its exact digest.",
+        field: "manifest_sha256",
+        context: {
+          model_id: "coffee-machine-v1",
+          model_version: "0.1.0",
+          scenario_id: "heat-up-nominal",
+          tool: "modelica_simulation_request_template_get",
+        },
+        recovery:
+          "Call modelica_simulation_manifest_get again on this server process, then use its exact manifest_sha256.",
+      });
+
+      const schemaRejected = await rpc(port, "tools/call", {
+        name: "modelica_simulate",
+        arguments: {
+          model_id: "coffee-machine-v1",
+          scenario_id: "not-qualified",
+        },
+      });
+      const schemaResult = schemaRejected.result as {
+        isError: boolean;
+        content: Array<{ text: string }>;
+      };
+      assertEquals(schemaResult.isError, true);
+      assertEquals(JSON.parse(schemaResult.content[0].text), {
+        schema: "modelica-mcp-error/1.0",
+        code: "input.schema_invalid",
+        message: "Input does not match the qualified schema for modelica_simulate.",
+        field: "input",
+        context: { tool: "modelica_simulate" },
+        recovery:
+          "Use the advertised inputSchema and retry with one qualified kit/version/scenario branch.",
+      });
     } finally {
       await http.shutdown();
     }
