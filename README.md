@@ -43,7 +43,7 @@ mkdir -p modelica-runs
 docker run --rm --name mcp-modelica \
   --publish 127.0.0.1:3016:3016 \
   --volume "$PWD/modelica-runs:/runs" \
-  ghcr.io/casys-ai/mcp-modelica:0.6.2
+  ghcr.io/casys-ai/mcp-modelica:0.6.3
 ```
 
 Connect a Streamable HTTP MCP client to `http://127.0.0.1:3016/mcp`; the process health probe is
@@ -53,8 +53,8 @@ for deployment.
 With the same OpenModelica/MSL runtime already installed, JSR can launch either transport:
 
 ```bash
-deno run -A jsr:@casys/mcp-modelica@0.6.2/server --port=3016
-deno run -A jsr:@casys/mcp-modelica@0.6.2/server --stdio
+deno run -A jsr:@casys/mcp-modelica@0.6.3/server --port=3016
+deno run -A jsr:@casys/mcp-modelica@0.6.3/server --stdio
 ```
 
 ## First useful call

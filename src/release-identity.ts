@@ -5,7 +5,7 @@
  * version is reported separately through MCP instructions, while solver run
  * records continue to identify OpenModelica/MSL only.
  */
-export const PACKAGE_VERSION = "0.6.2";
+export const PACKAGE_VERSION = "0.6.3";
 export const QUALIFIED_CONTAINER_DENO_VERSION = "2.9.6";
 
 export function runtimeIdentityInstructions(): string {

@@ -2,6 +2,16 @@
 
 All notable changes to `@casys/mcp-modelica` are documented here.
 
+## [0.6.3] - 2026-08-31
+
+### Fixed
+
+- The audited MCP View checkout under `.deps/` is now ignored as a CI-only build input, so the
+  tag-only JSR and GHCR archive gates see the exact source candidate as clean after rebuilding the
+  committed Apps.
+- The `v0.6.2` tag reached neither registry: both tag workflows stopped before publication when that
+  checkout appeared as an untracked directory. `0.6.3` is the publishable successor.
+
 ## [0.6.2] - 2026-08-31
 
 ### Added

@@ -15,11 +15,16 @@ Deno.test("Docker release inputs are immutable and verified", async () => {
   assertEquals(PACKAGE_VERSION, packageVersion);
   assertEquals(QUALIFIED_CONTAINER_DENO_VERSION, "2.9.6");
   const citation = await Deno.readTextFile(new URL("../CITATION.cff", import.meta.url));
+  const gitignore = await Deno.readTextFile(new URL("../.gitignore", import.meta.url));
   const server = await Deno.readTextFile(new URL("../server.ts", import.meta.url));
   const developmentGuide = await Deno.readTextFile(
     new URL("../docs/development-and-release.md", import.meta.url),
   );
   assertMatch(citation, new RegExp(`^version: ${packageVersion.replace(".", "\\.")}$`, "m"));
+  assert(
+    gitignore.split(/\r?\n/).includes(".deps/"),
+    "The CI-only audited MCP View checkout must not dirty tag publication worktrees.",
+  );
   assert(
     server.includes("version: PACKAGE_VERSION") &&
       server.includes("instructions: runtimeIdentityInstructions()"),

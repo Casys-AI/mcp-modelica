@@ -1,5 +1,6 @@
 import { assert, assertEquals } from "@std/assert";
 import { dirname, fromFileUrl, join } from "@std/path";
+import { PACKAGE_VERSION } from "../src/release-identity.ts";
 
 const repositoryRoot = join(dirname(fromFileUrl(import.meta.url)), "..");
 const resultsViewerPath = join(repositoryRoot, "src", "ui", "dist", "results-viewer", "index.html");
@@ -60,7 +61,7 @@ Deno.test("built viewers accept recorded whole-view sessions without removing st
     const html = await Deno.readTextFile(viewerPath);
     assert(html.includes("viewer.session.apply"));
     assert(html.includes("io.casys.mcp-modelica.results"));
-    assert(html.includes("0.6.2"));
+    assert(html.includes(PACKAGE_VERSION));
     assert(html.includes("io.casys.mcp-modelica.recorded-results-session/1.0"));
     assert(html.includes("simulate.run-qualified-modelica-kit@1"));
     assert(html.includes("simulate.run-admitted-modelica@1"));
