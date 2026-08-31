@@ -2,6 +2,15 @@
 
 All notable changes to `@casys/mcp-modelica` are documented here.
 
+## [Unreleased]
+
+### Changed
+
+- Compact Modelica MCP App default surfaces now present one run or one navigable run list using the
+  shared View v2 `SemanticElement` kit. Detailed identity, status, metrics, parameters, provenance,
+  artifact, warning, and table components remain advertised for host composition. Solver execution
+  stays a factual status, not a pass or proof verdict.
+
 ## [0.6.1] - 2026-08-29
 
 ### Changed

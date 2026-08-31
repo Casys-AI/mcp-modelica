@@ -70,25 +70,27 @@ button {
   overflow-wrap: anywhere;
 }
 
-.modelica-artifact {
-  display: grid;
-  gap: 0.55rem;
+.modelica-path-bar-host {
   min-width: 0;
-  padding: 0.65rem;
-  border: 1px solid var(--modelica-border);
-  border-radius: 0.55rem;
-  background: var(--modelica-subtle);
 }
 
-.modelica-artifact-summary {
-  padding: 0;
-  background: transparent;
+.modelica-shell > .modelica-path-bar-host {
+  margin: 0.65rem 0.85rem 0;
 }
 
-.modelica-artifact > code,
-.modelica-artifact dd code,
+.modelica-run-list {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+}
+
+.modelica-run-list .mcp-view-semantic-element[data-density="row"] + .mcp-view-semantic-element[data-density="row"] {
+  border-top: 0;
+}
+
 .mcp-view-key-value code,
-.mcp-view-table code {
+.mcp-view-table code,
+.mcp-view-element-provenance-value code {
   overflow-wrap: anywhere;
   color: var(--modelica-text);
   font: 0.7rem/1.4 var(--modelica-mono);
@@ -147,17 +149,6 @@ button {
 
 .modelica-recorded-state[data-status="recovery_required"] .modelica-recorded-state-dot {
   background: var(--modelica-warning);
-}
-
-.modelica-back-button {
-  min-height: 2rem;
-  border-color: var(--modelica-border);
-  background: transparent;
-  color: var(--modelica-muted);
-}
-
-.modelica-back-button:hover {
-  color: var(--modelica-text);
 }
 
 .spinner {

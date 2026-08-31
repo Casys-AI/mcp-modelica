@@ -16,6 +16,7 @@ const mcpViewPresentationModule = Deno.env.get("MCP_VIEW_PRESENTATION_MODULE") ?
   );
 const temporaryDirectory = await Deno.makeTempDir({ prefix: "mcp-modelica-view-build-" });
 const importMap = join(temporaryDirectory, "import-map.json");
+const lockFile = join(here, "deno.lock");
 const builds = [
   { entry: "main.ts", viewer: "results-viewer" },
   { entry: "run-list-main.ts", viewer: "run-list-viewer" },
@@ -31,10 +32,10 @@ try {
         "@casys/mcp-view-components": mcpViewComponentsModule,
         "@casys/mcp-view-components/preact": mcpViewComponentsPreactModule,
         "@casys/mcp-view-components/preact/components": mcpViewPresentationModule,
-        "preact": "npm:preact@^10.29.7",
-        "@modelcontextprotocol/ext-apps": "npm:@modelcontextprotocol/ext-apps@^1.7.4",
-        "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.29.0",
-        "@modelcontextprotocol/sdk/types.js": "npm:@modelcontextprotocol/sdk@^1.29.0/types.js",
+        "preact": "npm:preact@10.29.7",
+        "@modelcontextprotocol/ext-apps": "npm:@modelcontextprotocol/ext-apps@1.7.5",
+        "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@1.30.0",
+        "@modelcontextprotocol/sdk/types.js": "npm:@modelcontextprotocol/sdk@1.30.0/types.js",
       },
     }),
   );
@@ -45,6 +46,9 @@ try {
         "bundle",
         "--config",
         importMap,
+        "--lock",
+        lockFile,
+        "--frozen",
         "--check",
         "--platform=browser",
         "--minify",

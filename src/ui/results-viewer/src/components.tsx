@@ -6,29 +6,40 @@ import { defineComponentRegistry } from "@casys/mcp-view-components";
 import type { ViewComponentRegistry } from "@casys/mcp-view-components";
 import { definePreactComponent } from "@casys/mcp-view-components/preact";
 import {
+  ArtifactRow,
   Badge,
   Card,
   DataTable,
+  ElementBody,
+  ElementIdent,
+  ElementProvenance,
+  ElementReading,
   EmptyState,
   KeyValueList,
+  Message,
   MetricGrid,
+  SemanticElement,
+  Stack,
   StateMessage,
 } from "@casys/mcp-view-components/preact/components";
 import type { ResultsViewerState } from "./app.ts";
+import {
+  compactRunMetricEntries,
+  compactRunWarnings,
+  executionStatusTone,
+  MODELICA_COMPONENTS,
+  MODELICA_RUN_DEFAULT_SURFACE,
+  MODELICA_RUN_LIST_DEFAULT_SURFACE,
+  modelicaRunReference,
+} from "./component-catalog.ts";
 import type { RunSummary, SimulationRun } from "./model.ts";
-import { formatTimestamp } from "./render.ts";
+import { formatMetricValue, formatTimestamp } from "./render.ts";
 
-export const MODELICA_COMPONENTS = {
-  runIdentity: "modelica.run-identity",
-  executionStatus: "modelica.execution-status",
-  metrics: "modelica.metrics",
-  parameters: "modelica.parameters",
-  provenance: "modelica.provenance",
-  artifacts: "modelica.artifacts",
-  warnings: "modelica.warnings",
-  runListSummary: "modelica.run-list-summary",
-  runTable: "modelica.run-table",
-} as const;
+export {
+  MODELICA_COMPONENTS,
+  MODELICA_RUN_DEFAULT_SURFACE,
+  MODELICA_RUN_LIST_DEFAULT_SURFACE,
+} from "./component-catalog.ts";
 
 type ViewerContext = AppContext<ResultsViewerState>;
 
@@ -38,6 +49,17 @@ export function createRunComponentRegistry(): ViewComponentRegistry<
 > {
   return defineComponentRegistry({
     components: {
+      [MODELICA_COMPONENTS.runSummary]: definePreactComponent<
+        SimulationRun,
+        ViewerContext
+      >(
+        {
+          title: "Run",
+          description:
+            "Compact run identity, factual execution state, bounded readings, and provenance.",
+        },
+        ({ data }) => <RunSummaryCard run={data} />,
+      ),
       [MODELICA_COMPONENTS.runIdentity]: definePreactComponent<
         SimulationRun,
         ViewerContext
@@ -69,7 +91,7 @@ export function createRunComponentRegistry(): ViewComponentRegistry<
         ({ data }) => (
           <Card title="Execution status">
             <div class="mcp-view-row">
-              <Badge tone={statusTone(data.status)}>{data.status}</Badge>
+              <Badge tone={executionStatusTone(data.status)}>{data.status}</Badge>
               <span class="modelica-muted">Modelica execution</span>
             </div>
           </Card>
@@ -184,24 +206,18 @@ export function createRunComponentRegistry(): ViewComponentRegistry<
           >
             {data.artifacts.length
               ? (
-                <div class="mcp-view-stack">
+                <Stack gap="sm">
                   {data.artifacts.map((artifact) => (
-                    <article class="modelica-artifact" key={artifact.uri}>
-                      <div class="mcp-view-row modelica-artifact-summary">
-                        <Badge tone="info">{artifact.kind}</Badge>
-                        <span>{artifact.bytes.toLocaleString()} bytes</span>
-                      </div>
-                      <code>{artifact.uri}</code>
-                      <KeyValueList
-                        items={[{
-                          id: "sha256",
-                          label: "SHA-256",
-                          value: <code>{artifact.sha256}</code>,
-                        }]}
-                      />
-                    </article>
+                    <ArtifactRow
+                      key={artifact.uri}
+                      kind={artifact.kind}
+                      label={artifactLabel(artifact)}
+                      uri={artifact.uri}
+                      fingerprint={{ algorithm: "SHA-256", digest: artifact.sha256 }}
+                      sizeLabel={`${artifact.bytes.toLocaleString()} bytes`}
+                    />
                   ))}
-                </div>
+                </Stack>
               )
               : <EmptyState>No artifacts were recorded.</EmptyState>}
           </Card>
@@ -232,18 +248,7 @@ export function createRunComponentRegistry(): ViewComponentRegistry<
             : null,
       ),
     },
-    defaultSurface: {
-      layout: { type: "stack", gap: "md" },
-      components: [
-        { id: "identity", component: MODELICA_COMPONENTS.runIdentity },
-        { id: "status", component: MODELICA_COMPONENTS.executionStatus },
-        { id: "metrics", component: MODELICA_COMPONENTS.metrics },
-        { id: "parameters", component: MODELICA_COMPONENTS.parameters },
-        { id: "provenance", component: MODELICA_COMPONENTS.provenance },
-        { id: "artifacts", component: MODELICA_COMPONENTS.artifacts },
-        { id: "warnings", component: MODELICA_COMPONENTS.warnings },
-      ],
-    },
+    defaultSurface: MODELICA_RUN_DEFAULT_SURFACE,
   });
 }
 
@@ -253,6 +258,16 @@ export function createRunListComponentRegistry(): ViewComponentRegistry<
 > {
   return defineComponentRegistry({
     components: {
+      [MODELICA_COMPONENTS.runList]: definePreactComponent<
+        RunSummary[],
+        ViewerContext
+      >(
+        {
+          title: "Persisted runs",
+          description: "Navigable list of immutable Modelica run records.",
+        },
+        ({ data, context }) => <PersistedRunList runs={data} context={context} />,
+      ),
       [MODELICA_COMPONENTS.runListSummary]: definePreactComponent<
         RunSummary[],
         ViewerContext
@@ -284,17 +299,15 @@ export function createRunListComponentRegistry(): ViewComponentRegistry<
               label="Persisted Modelica runs"
               rows={data}
               rowKey={(run) => run.run_id}
-              onSelect={(run) =>
-                void context.navigate("detail", {
-                  runId: run.run_id,
-                  recorded: run.record_schema_version === "2.0",
-                })}
+              onSelect={(run) => openPersistedRun(context, run)}
               columns={[
                 { id: "run", label: "Run", render: (run) => <code>{run.run_id}</code> },
                 {
                   id: "execution",
                   label: "Execution",
-                  render: (run) => <Badge tone={statusTone(run.status)}>{run.status}</Badge>,
+                  render: (run) => (
+                    <Badge tone={executionStatusTone(run.status)}>{run.status}</Badge>
+                  ),
                 },
                 { id: "model", label: "Model", render: (run) => run.model.id },
                 { id: "scenario", label: "Scenario", render: (run) => run.scenario.id },
@@ -309,13 +322,120 @@ export function createRunListComponentRegistry(): ViewComponentRegistry<
         ),
       ),
     },
-    defaultSurface: {
-      layout: { type: "stack", gap: "sm" },
-      components: [
-        { id: "summary", component: MODELICA_COMPONENTS.runListSummary },
-        { id: "runs", component: MODELICA_COMPONENTS.runTable },
-      ],
-    },
+    defaultSurface: MODELICA_RUN_LIST_DEFAULT_SURFACE,
+  });
+}
+
+function RunSummaryCard({ run }: { readonly run: SimulationRun }) {
+  const compactMetrics = compactRunMetricEntries(run.metrics);
+  const compactWarnings = compactRunWarnings(run.warnings);
+  const readings = compactMetrics.entries.map(([id, quantity]) => (
+    <ElementReading
+      key={id}
+      label={id}
+      value={formatMetricValue(quantity.value)}
+      unit={quantity.unit}
+    />
+  ));
+  return (
+    <SemanticElement
+      reference={modelicaRunReference(run)}
+      density="card"
+      ident={
+        <ElementIdent
+          marker={<Badge tone={executionStatusTone(run.status)}>{run.status}</Badge>}
+          label={run.run_id}
+          detail={`${run.model.id} / ${run.scenario.id}`}
+        />
+      }
+      reading={readings.length ? readings : undefined}
+      body={compactWarnings.entries.length || compactMetrics.omitted > 0
+        ? (
+          <ElementBody>
+            <Stack gap="sm">
+              {compactMetrics.omitted > 0 && (
+                <Message>
+                  {`${compactMetrics.omitted} additional metric${
+                    compactMetrics.omitted === 1 ? "" : "s"
+                  } available in the detailed metrics component.`}
+                </Message>
+              )}
+              {compactWarnings.entries.length > 0 && (
+                <Message tone="warning">
+                  {`${run.warnings.length} warning${run.warnings.length === 1 ? "" : "s"}`}
+                  <ul class="modelica-notes">
+                    {compactWarnings.entries.map((note, index) => (
+                      <li key={`${index}:${note}`}>{note}</li>
+                    ))}
+                  </ul>
+                  {compactWarnings.omitted > 0 && (
+                    <span>
+                      {`${compactWarnings.omitted} additional warning${
+                        compactWarnings.omitted === 1 ? "" : "s"
+                      } available in the detailed warnings component.`}
+                    </span>
+                  )}
+                </Message>
+              )}
+            </Stack>
+          </ElementBody>
+        )
+        : undefined}
+      provenance={
+        <ElementProvenance
+          label="Fingerprint"
+          value={<code>{run.fingerprint}</code>}
+        />
+      }
+    />
+  );
+}
+
+function PersistedRunList({
+  runs,
+  context,
+}: {
+  readonly runs: RunSummary[];
+  readonly context: ViewerContext;
+}) {
+  return (
+    <div
+      aria-label={`${runs.length} persisted Modelica run${runs.length === 1 ? "" : "s"}`}
+      class="modelica-run-list"
+    >
+      {runs.map((run) => (
+        <SemanticElement
+          key={run.run_id}
+          reference={modelicaRunReference(run)}
+          density="row"
+          ident={
+            <ElementIdent
+              marker={<Badge tone={executionStatusTone(run.status)}>{run.status}</Badge>}
+              label={run.run_id}
+              detail={`${run.model.id} / ${run.scenario.id}`}
+            />
+          }
+          provenance={
+            <ElementProvenance
+              label="Fingerprint"
+              value={run.fingerprint}
+            />
+          }
+          activationLabel={`Open run ${run.run_id}`}
+          onActivate={() => openPersistedRun(context, run)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function openPersistedRun(
+  context: ViewerContext,
+  run: Pick<RunSummary, "run_id" | "record_schema_version">,
+): void {
+  void context.navigate("detail", {
+    runId: run.run_id,
+    recorded: run.record_schema_version === "2.0",
   });
 }
 
@@ -325,17 +445,12 @@ function quantities(
   return Object.entries(values).map(([id, quantity]) => ({
     id,
     label: id,
-    value: new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(
-      quantity.value,
-    ),
+    value: formatMetricValue(quantity.value),
     unit: quantity.unit,
   }));
 }
 
-function statusTone(status: SimulationRun["status"] | RunSummary["status"]) {
-  return status === "succeeded"
-    ? "success" as const
-    : status === "timed_out"
-    ? "warning" as const
-    : "danger" as const;
+function artifactLabel(artifact: SimulationRun["artifacts"][number]): string {
+  const segment = artifact.uri.split("/").filter(Boolean).at(-1);
+  return segment ?? artifact.kind;
 }

@@ -1,5 +1,20 @@
 import { assertEquals, assertRejects, assertStringIncludes, assertThrows } from "@std/assert";
 import { PACKAGE_VERSION } from "../../../release-identity.ts";
+import {
+  compactRunMetricEntries,
+  compactRunWarnings,
+  executionStatusTone,
+  MODELICA_COMPACT_READING_LIMIT,
+  MODELICA_COMPACT_WARNING_LIMIT,
+  MODELICA_COMPONENTS,
+  MODELICA_RUN_CATALOG,
+  MODELICA_RUN_DEFAULT_SURFACE,
+  MODELICA_RUN_LIST_CATALOG,
+  MODELICA_RUN_LIST_DEFAULT_SURFACE,
+  MODELICA_RUN_LIST_PATH_ID,
+  modelicaRunListPath,
+  modelicaRunReference,
+} from "./component-catalog.ts";
 import { errorMessage, parseResultsEnvelope, type SimulationRun } from "./model.ts";
 import {
   loadModelicaRunDetail,
@@ -110,6 +125,129 @@ Deno.test("results viewer normalizes v1 without inventing native scenario proven
   assertEquals(parsed.run.scenario.source_sha256, undefined);
   assertEquals(parsed.run.parameter_schema, undefined);
   assertEquals(parsed.run.result_normalizer, undefined);
+});
+
+Deno.test("results parser rejects derived curves on a direct run envelope", () => {
+  assertThrows(
+    () =>
+      parseResultsEnvelope({
+        schemaVersion: "2.0",
+        kind: "run",
+        run: { ...run, curves: [{ source: run.fingerprint }] },
+      }),
+    TypeError,
+    "Expected a Modelica run or run-list envelope",
+  );
+});
+
+Deno.test("default run surface is one compact SemanticElement, not the full catalog", () => {
+  assertEquals(
+    MODELICA_RUN_DEFAULT_SURFACE.components.map((item) => item.component),
+    [MODELICA_COMPONENTS.runSummary],
+  );
+  assertEquals(MODELICA_RUN_DEFAULT_SURFACE.components.length, 1);
+  assertEquals(
+    MODELICA_RUN_CATALOG,
+    [
+      MODELICA_COMPONENTS.runSummary,
+      MODELICA_COMPONENTS.runIdentity,
+      MODELICA_COMPONENTS.executionStatus,
+      MODELICA_COMPONENTS.metrics,
+      MODELICA_COMPONENTS.parameters,
+      MODELICA_COMPONENTS.provenance,
+      MODELICA_COMPONENTS.artifacts,
+      MODELICA_COMPONENTS.warnings,
+    ],
+  );
+  assertEquals(MODELICA_RUN_CATALOG.length > MODELICA_RUN_DEFAULT_SURFACE.components.length, true);
+});
+
+Deno.test("compact run readings are deterministic across provider and persisted key order", () => {
+  const bounded = compactRunMetricEntries({
+    d: 4,
+    b: 2,
+    e: 5,
+    a: 1,
+    c: 3,
+  });
+  const persistedOrder = compactRunMetricEntries({ a: 1, b: 2, c: 3, d: 4, e: 5 });
+  assertEquals(MODELICA_COMPACT_READING_LIMIT, 3);
+  assertEquals(bounded.entries, [["a", 1], ["b", 2], ["c", 3]]);
+  assertEquals(bounded, persistedOrder);
+  assertEquals(bounded.omitted, 2);
+});
+
+Deno.test("compact run warnings are bounded without hiding the omitted count", () => {
+  const bounded = compactRunWarnings(["first", "second", "third", "fourth"]);
+  assertEquals(MODELICA_COMPACT_WARNING_LIMIT, 2);
+  assertEquals(bounded.entries, ["first", "second"]);
+  assertEquals(bounded.omitted, 2);
+});
+
+Deno.test("default run-list surface is one navigable list, not every list component", () => {
+  assertEquals(
+    MODELICA_RUN_LIST_DEFAULT_SURFACE.components.map((item) => item.component),
+    [MODELICA_COMPONENTS.runList],
+  );
+  assertEquals(
+    MODELICA_RUN_LIST_CATALOG,
+    [
+      MODELICA_COMPONENTS.runList,
+      MODELICA_COMPONENTS.runListSummary,
+      MODELICA_COMPONENTS.runTable,
+    ],
+  );
+});
+
+Deno.test("solver execution status is not a pass or proof verdict", () => {
+  assertEquals(executionStatusTone("succeeded"), "neutral");
+  assertEquals(executionStatusTone("timed_out"), "warning");
+  assertEquals(executionStatusTone("failed"), "danger");
+});
+
+Deno.test("run semantic reference carries exact identity and fingerprint", () => {
+  assertEquals(modelicaRunReference(run), {
+    domain: "simulation",
+    kind: "run",
+    id: run.run_id,
+    basisFingerprint: run.fingerprint,
+  });
+  assertEquals(
+    modelicaRunReference({ run_id: run.run_id, fingerprint: "not-a-digest" }).basisFingerprint,
+    undefined,
+  );
+});
+
+Deno.test("PathBar exists only for All runs to run navigation", () => {
+  assertEquals(modelicaRunListPath(run.run_id), {
+    items: [
+      { id: MODELICA_RUN_LIST_PATH_ID, label: "All runs" },
+      { id: run.run_id, label: run.run_id },
+    ],
+    currentId: run.run_id,
+  });
+  assertThrows(() => modelicaRunListPath("  "), TypeError, "Run path requires a run id");
+});
+
+Deno.test("component sources keep detailed catalog, compact defaults, and no synthetic traces", async () => {
+  const components = await Deno.readTextFile(new URL("./components.tsx", import.meta.url));
+  const app = await Deno.readTextFile(new URL("./app.ts", import.meta.url));
+  assertStringIncludes(components, "SemanticElement");
+  assertStringIncludes(components, "ElementIdent");
+  assertStringIncludes(components, "ElementReading");
+  assertStringIncludes(components, "ElementBody");
+  assertStringIncludes(components, "ElementProvenance");
+  assertStringIncludes(components, "ArtifactRow");
+  assertStringIncludes(components, "defaultSurface: MODELICA_RUN_DEFAULT_SURFACE");
+  assertStringIncludes(components, "defaultSurface: MODELICA_RUN_LIST_DEFAULT_SURFACE");
+  assertEquals(components.includes("ElementVerdict"), false);
+  assertEquals(components.includes("LimitGauge"), false);
+  assertEquals(components.includes("curves"), false);
+  assertEquals(/\bproof\b|\bpass\b/.test(components), false);
+  assertStringIncludes(app, "PathBar");
+  assertStringIncludes(app, "modelicaRunListPath");
+  assertStringIncludes(app, "if (data.runId) addListPathBar(ctx, node, masthead, data.runId)");
+  assertEquals(app.includes("‹ All runs"), false);
 });
 
 Deno.test("results viewer formatting is truthful and HTML-safe", () => {

@@ -346,19 +346,22 @@ recorded artifact identity to every projected run and verifies a separate SHA-25
 canonical projection. It cannot relabel foreign evidence or derive detail from a fingerprint.
 
 The run viewer advertises small, App-owned components rather than alternate size modes:
-`modelica.run-identity`, `modelica.execution-status`, `modelica.metrics`, `modelica.parameters`,
-`modelica.provenance`, `modelica.artifacts`, and `modelica.warnings`. The run-list resource
-separately advertises `modelica.run-list-summary` and `modelica.run-table`. Its standalone viewer is
-simply the default surface that assembles the complete catalog. A compatible `@casys/mcp-compose`
-host may request a different explicit subset and safe stack/row/grid layout without inspecting the
-iframe DOM.
+`modelica.run-summary`, `modelica.run-identity`, `modelica.execution-status`, `modelica.metrics`,
+`modelica.parameters`, `modelica.provenance`, `modelica.artifacts`, and `modelica.warnings`. The
+run-list resource separately advertises `modelica.run-list`, `modelica.run-list-summary`, and
+`modelica.run-table`. Each standalone viewer uses a compact default surface: one run
+`SemanticElement`, or one navigable list of run rows. Identity, status, metrics, parameters,
+provenance, artifacts, warnings, and the tabular list remain in the catalog for host-negotiated
+composition. A compatible `@casys/mcp-compose` host may request a different explicit subset and safe
+stack/row/grid layout without inspecting the iframe DOM.
 
 Every Modelica component now maps its domain data into the optional shared Preact presentation kit
-from `@casys/mcp-view-components/preact/components`: `Card`, `Badge`, `MetricGrid`, `KeyValueList`,
-`DataTable`, `EmptyState`, and `StateMessage`. Modelica owns the evidence semantics and small
-artifact-specific layout; it does not maintain a parallel card, metric, table, or state design
-system. When Compose selects a surface, the App mounts only those cards and omits its standalone
-masthead.
+from `@casys/mcp-view-components/preact/components`. Compact surfaces use `SemanticElement` with
+`ElementIdent`, `ElementReading`, `ElementBody`, and `ElementProvenance`. Solver execution stays a
+factual status; it is never an `ElementVerdict`, pass, or proof. Artifact ledgers use `ArtifactRow`.
+The existing All runs → run drill-down uses `PathBar`. Modelica does not use `LimitGauge`: the
+result contract has no explicit bound to display. When Compose selects a surface, the App mounts
+only those components and omits its standalone masthead.
 
 No component claims a temperature curve: the current structured result contains scalar metrics and a
 hashed CSV artifact reference, but not the samples needed to render a truthful series inside the

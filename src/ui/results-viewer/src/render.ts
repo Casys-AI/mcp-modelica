@@ -1,9 +1,11 @@
 import type { Quantity } from "./model.ts";
 
+export function formatMetricValue(value: number): string {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(value);
+}
+
 export function formatQuantity(quantity: Quantity): string {
-  return `${
-    new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(quantity.value)
-  } ${quantity.unit}`;
+  return `${formatMetricValue(quantity.value)} ${quantity.unit}`;
 }
 
 export function formatTimestamp(value: string | undefined): string {

@@ -36,12 +36,17 @@ Deno.test("built viewers advertise small component catalogs without projection m
   const listHtml = await Deno.readTextFile(runListViewerPath);
 
   assert(html.includes("io.casys.mcp.view-components/v1"));
+  assert(html.includes("modelica.run-summary"));
   assert(html.includes("modelica.run-identity"));
   assert(html.includes("modelica.execution-status"));
   assert(html.includes("modelica.metrics"));
   assert(html.includes("modelica.provenance"));
+  assert(html.includes("mcp-view-semantic-element"));
+  assert(html.includes("mcp-view-artifact-row"));
+  assert(listHtml.includes("modelica.run-list"));
   assert(listHtml.includes("modelica.run-list-summary"));
   assert(listHtml.includes("modelica.run-table"));
+  assert(listHtml.includes("mcp-view-path-bar"));
   for (const bundle of [html, listHtml]) {
     assertEquals(bundle.includes("io.casys.mcp.composable-view/v1"), false);
     assertEquals(bundle.includes("data-casys-projection-purpose"), false);

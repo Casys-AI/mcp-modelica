@@ -13,11 +13,14 @@ import type {
   MountedComponentSurface,
   ViewComponentRegistry,
 } from "@casys/mcp-view-components";
+import { PathBar } from "@casys/mcp-view-components/preact/components";
+import { createElement, render } from "preact";
 import {
   type ActiveWholeView,
   createWholeViewTransitionCoordinator,
   remountActiveWholeView,
 } from "./active-whole-view.ts";
+import { MODELICA_RUN_LIST_PATH_ID, modelicaRunListPath } from "./component-catalog.ts";
 import { createRunComponentRegistry, createRunListComponentRegistry } from "./components.tsx";
 import {
   type DisplayState,
@@ -41,8 +44,8 @@ import { resolveWholeViewSurfacePolicy } from "./whole-view-surface-policy.ts";
 
 type DetailData =
   | { run: SimulationRun; localDrilldown: boolean }
-  | { recordedStatus: ModelicaRecordedSessionStatus; message: string }
-  | { error: string };
+  | { recordedStatus: ModelicaRecordedSessionStatus; message: string; runId: string }
+  | { error: string; runId?: string };
 
 type DetailArgs =
   | ResultsEnvelope
@@ -186,11 +189,13 @@ function createDetailView(
             message: "reason" in detail
               ? detail.reason
               : defaultRecordedStatusMessage(detail.status),
+            runId: args.runId,
           },
         );
       } catch (error) {
         return remember({
           error: error instanceof Error ? error.message : "The run could not be retrieved.",
+          runId: args.runId,
         });
       }
     },
@@ -204,17 +209,21 @@ function createDetailView(
           false,
           true,
         );
-        addListBackButton(ctx, node, masthead);
+        addListPathBar(ctx, node, masthead, data.runId);
         target.innerHTML = recordedState(data.recordedStatus, data.message);
         return node;
       }
       if ("error" in data) {
-        return shell(
+        const { node, target, masthead } = componentShell(
           "Simulation evidence",
+          false,
+        );
+        if (data.runId) addListPathBar(ctx, node, masthead, data.runId);
+        target.innerHTML =
           `<div class="mcp-view-state" data-tone="danger" role="alert"><strong>Unable to load run detail</strong><div class="mcp-view-state-detail">${
             escapeHtml(data.error)
-          }</div></div>`,
-        );
+          }</div></div>`;
+        return node;
       }
       const recorded = ctx.state.recordedSession !== undefined;
       const presentation = resolveWholeViewSurfacePolicy({
@@ -228,7 +237,7 @@ function createDetailView(
         presentation.componentOnly,
         recorded,
       );
-      addListBackButton(ctx, node, masthead);
+      addListPathBar(ctx, node, masthead, data.run.run_id);
       scheduleSurfaceMount(
         target,
         registry,
@@ -449,6 +458,7 @@ function scheduleSurfaceMount<TData>(
 }
 
 async function disposeMountedSurface(invalidate = true): Promise<void> {
+  disposePathBar();
   await surfaceMounts.dispose(invalidate);
 }
 
@@ -483,20 +493,43 @@ function defaultRecordedStatusMessage(status: ModelicaRecordedSessionStatus): st
   }
 }
 
-function addListBackButton(
+let pathBarRoot: HTMLElement | undefined;
+
+function disposePathBar(): void {
+  if (!pathBarRoot) return;
+  render(null, pathBarRoot);
+  pathBarRoot = undefined;
+}
+
+function addListPathBar(
   ctx: ViewerContext,
   node: HTMLElement,
   masthead: HTMLElement,
+  runId: string,
 ): void {
+  disposePathBar();
   if (ctx.state.display.kind !== "run-list") return;
-  const back = document.createElement("button");
-  back.className = "mcp-view-button modelica-back-button";
-  back.type = "button";
-  back.textContent = "‹ All runs";
-  back.addEventListener("click", () => {
-    const display = ctx.state.display;
-    if (display.kind === "run-list") void ctx.navigate("list", display);
-  });
-  masthead.prepend(back);
-  if (masthead.parentElement === null) node.prepend(masthead);
+  const host = document.createElement("div");
+  host.className = "modelica-path-bar-host";
+  const path = modelicaRunListPath(runId);
+  render(
+    createElement(PathBar, {
+      label: "Run navigation",
+      items: path.items,
+      currentId: path.currentId,
+      onSelect: (id: string) => {
+        if (id !== MODELICA_RUN_LIST_PATH_ID) return;
+        const display = ctx.state.display;
+        if (display.kind === "run-list") void ctx.navigate("list", display);
+      },
+    }),
+    host,
+  );
+  pathBarRoot = host;
+  if (masthead.parentElement === null) {
+    masthead.prepend(host);
+    node.prepend(masthead);
+    return;
+  }
+  node.insertBefore(host, masthead);
 }
