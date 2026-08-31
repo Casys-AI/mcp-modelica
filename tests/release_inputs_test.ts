@@ -16,7 +16,9 @@ Deno.test("Docker release inputs are immutable and verified", async () => {
   assertEquals(QUALIFIED_CONTAINER_DENO_VERSION, "2.9.6");
   const citation = await Deno.readTextFile(new URL("../CITATION.cff", import.meta.url));
   const server = await Deno.readTextFile(new URL("../server.ts", import.meta.url));
-  const readme = await Deno.readTextFile(new URL("../README.md", import.meta.url));
+  const developmentGuide = await Deno.readTextFile(
+    new URL("../docs/development-and-release.md", import.meta.url),
+  );
   assertMatch(citation, new RegExp(`^version: ${packageVersion.replace(".", "\\.")}$`, "m"));
   assert(
     server.includes("version: PACKAGE_VERSION") &&
@@ -24,7 +26,7 @@ Deno.test("Docker release inputs are immutable and verified", async () => {
     "Discovery must distinguish the package release identity from the actual Deno runtime identity.",
   );
   assert(
-    readme.includes(
+    developmentGuide.includes(
       "For local development, install Deno 2.9.6, OpenModelica 1.27.0, and MSL 4.1.0",
     ),
     "Local development documentation must name the exact qualified Deno runtime release.",

@@ -2,7 +2,7 @@
 
 All notable changes to `@casys/mcp-modelica` are documented here.
 
-## [0.6.2] - Unreleased
+## [0.6.2] - 2026-08-31
 
 ### Added
 
@@ -27,6 +27,9 @@ All notable changes to `@casys/mcp-modelica` are documented here.
 - Recorded admitted execution sessions bind the visible solver-result anchor to the exact admission,
   capture, evidence, and result artifacts, then verify the capture, execution, receipt, publication,
   and output fingerprints before applying viewer state.
+- The concise README now leads with the exact recorded MCS01 viewer capture. Historical contracts,
+  recorded sessions, provider/runtime boundaries, and development/release guidance live under
+  `docs/` and ship with the JSR package.
 
 ## [0.6.1] - 2026-08-29
 
