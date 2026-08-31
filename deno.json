@@ -1,16 +1,18 @@
 {
   "name": "@casys/mcp-modelica",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
-    "./server": "./server.ts"
+    "./server": "./server.ts",
+    "./view-app-manifest": "./src/ui/view-app-manifest.json"
   },
   "publish": {
     "include": [
       "mod.ts",
       "server.ts",
       "src/**/*.ts",
+      "src/ui/view-app-manifest.json",
       "src/ui/dist/**/*.html",
       "models/**/*.mo",
       "models/**/*.json",

@@ -2,7 +2,13 @@
 
 All notable changes to `@casys/mcp-modelica` are documented here.
 
-## [Unreleased]
+## [0.6.2] - Unreleased
+
+### Added
+
+- A provider-owned serialized View App manifest, published through the
+  `./view-app-manifest` package export, declares both exact Modelica viewer resources and their
+  recorded-session compatibility without embedding a session, anchor, or provider authority.
 
 ### Changed
 

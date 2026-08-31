@@ -126,8 +126,28 @@ export interface ModelicaRecordedViewSession {
   readonly projection: ModelicaRecordedViewProjection;
 }
 
+/** Raw action payload after synchronous exact-shape and resource validation. */
+export type ModelicaRecordedViewSessionInput = Readonly<Record<string, unknown>>;
+
 const MAX_RECORDED_RUN_DETAILS = 20;
 const DIGEST_PATTERN = /^[0-9a-f]{64}$/;
+
+/**
+ * Synchronous ingress guard for `viewer.session.apply`.
+ *
+ * It validates the full closed structure, authority joins, and target resource. The asynchronous
+ * parser still verifies the raw projection fingerprint with WebCrypto before applying any state.
+ */
+export function isModelicaRecordedViewSessionInputForResource(
+  value: unknown,
+  resource: "run" | "run-list",
+): value is ModelicaRecordedViewSessionInput {
+  try {
+    return modelicaSessionResource(parseModelicaRecordedViewSessionStructure(value)) === resource;
+  } catch {
+    return false;
+  }
+}
 
 /** Validate and fingerprint a host-supplied read model without acquiring MCP or solver authority. */
 export async function parseModelicaRecordedViewSession(

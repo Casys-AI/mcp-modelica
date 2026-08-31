@@ -60,6 +60,7 @@ Deno.test("built viewers accept recorded whole-view sessions without removing st
     const html = await Deno.readTextFile(viewerPath);
     assert(html.includes("viewer.session.apply"));
     assert(html.includes("io.casys.mcp-modelica.results"));
+    assert(html.includes("0.6.2"));
     assert(html.includes("io.casys.mcp-modelica.recorded-results-session/1.0"));
     assert(html.includes("simulate.run-qualified-modelica-kit@1"));
     assert(html.includes("simulate.run-admitted-modelica@1"));

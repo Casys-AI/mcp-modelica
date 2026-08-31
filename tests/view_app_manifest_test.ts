@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import { PACKAGE_VERSION } from "../src/release-identity.ts";
 import {
   MODELICA_RECORDED_VIEW_SESSION_SCHEMA,
@@ -37,4 +37,25 @@ Deno.test("public Modelica App manifest names the exact registered resources", (
     MODELICA_RESULT_SCHEMA_IDS.legacyRunList,
     MODELICA_RESULT_SCHEMA_IDS.recordedRunList,
   ]);
+});
+
+Deno.test("serialized Modelica App manifest is the exact exported package contract", async () => {
+  const packageConfig = JSON.parse(
+    await Deno.readTextFile(new URL("../deno.json", import.meta.url)),
+  ) as {
+    version: string;
+    exports: Record<string, string>;
+    publish: { include: string[] };
+  };
+  const serializedManifest = JSON.parse(
+    await Deno.readTextFile(new URL("../src/ui/view-app-manifest.json", import.meta.url)),
+  );
+
+  assertEquals(serializedManifest, MODELICA_VIEW_APP_MANIFEST);
+  assertEquals(serializedManifest.app.version, packageConfig.version);
+  assertEquals(packageConfig.exports["./view-app-manifest"], "./src/ui/view-app-manifest.json");
+  assert(
+    packageConfig.publish.include.includes("src/ui/view-app-manifest.json"),
+    "The serialized App manifest must be present in the published package archive.",
+  );
 });

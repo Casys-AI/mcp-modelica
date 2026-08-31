@@ -18,6 +18,7 @@ import {
 } from "./component-catalog.ts";
 import { errorMessage, parseResultsEnvelope, type SimulationRun } from "./model.ts";
 import {
+  isModelicaRecordedViewSessionInputForResource,
   loadModelicaRunDetail,
   MODELICA_RECORDED_OPERATIONS,
   MODELICA_RECORDED_VIEW_SESSION_SCHEMA,
@@ -573,6 +574,26 @@ Deno.test("recorded session verifies the fingerprint of the raw projection", asy
     () => parseModelicaRecordedViewSession(session),
     TypeError,
     "projectionSha256 does not match",
+  );
+});
+
+Deno.test("viewer.session.apply ingress rejects foreign shapes and resources", async () => {
+  const session = await recordedSession({ status: "pending" });
+  assertEquals(isModelicaRecordedViewSessionInputForResource(session, "run-list"), true);
+  assertEquals(isModelicaRecordedViewSessionInputForResource(session, "run"), false);
+  assertEquals(
+    isModelicaRecordedViewSessionInputForResource({ ...session, unexpected: true }, "run-list"),
+    false,
+  );
+  assertEquals(
+    isModelicaRecordedViewSessionInputForResource({
+      ...session,
+      provenance: {
+        ...session.provenance,
+        recordedOperation: "verify.run-fea-static-proof@3",
+      },
+    }, "run-list"),
+    false,
   );
 });
 

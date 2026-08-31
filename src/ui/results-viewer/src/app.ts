@@ -35,10 +35,12 @@ import {
   type SimulationRun,
 } from "./model.ts";
 import {
+  isModelicaRecordedViewSessionInputForResource,
   loadModelicaRunDetail,
   MODELICA_VIEW_APP_INFO,
   type ModelicaRecordedSessionStatus,
   type ModelicaRecordedViewSession,
+  type ModelicaRecordedViewSessionInput,
   modelicaSessionResource,
   parseModelicaRecordedViewSession,
 } from "./recorded-session.ts";
@@ -323,7 +325,7 @@ export async function bootResultsViewer(options: ResultsViewerOptions): Promise<
     });
   };
 
-  const app = await createMcpApp<ResultsViewerState, unknown>({
+  const app = await createMcpApp<ResultsViewerState, ModelicaRecordedViewSessionInput>({
     info: MODELICA_VIEW_APP_INFO,
     root,
     views: { status: statusView, list: listView, detail: detailView },
@@ -331,9 +333,10 @@ export async function bootResultsViewer(options: ResultsViewerOptions): Promise<
     initialState: { display: { kind: "loading" } },
     capabilities: { experimental: componentCapabilities },
     viewerSession: {
-      // The strict projection fingerprint uses asynchronous WebCrypto. Admit the opaque transport
-      // payload into the core FIFO, then parse it fully before any state or navigation changes.
-      validate: (_value: unknown): _value is unknown => true,
+      // Reject foreign shapes and resources synchronously. WebCrypto verifies the fingerprint in
+      // onSession before any recorded state or navigation is applied.
+      validate: (value): value is ModelicaRecordedViewSessionInput =>
+        isModelicaRecordedViewSessionInputForResource(value, options.resource),
       async onSession(value, _payload, app) {
         try {
           await applyRecordedSession(await parseModelicaRecordedViewSession(value), app);

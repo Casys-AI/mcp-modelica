@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "io.casys.mcp.view-app-manifest/1.0",
+  "app": {
+    "id": "io.casys.mcp-modelica.results",
+    "title": "Modelica results",
+    "version": "0.6.2"
+  },
+  "resources": [
+    {
+      "uri": "ui://mcp-modelica/results-viewer",
+      "ownership": "whole-view",
+      "resultSchemas": [
+        "io.casys.mcp-modelica.run-result/1.0",
+        "io.casys.mcp-modelica.run-result/2.0"
+      ],
+      "acceptedActions": [
+        "viewer.session.apply"
+      ],
+      "sessionSchemas": [
+        "io.casys.mcp-modelica.recorded-results-session/1.0"
+      ]
+    },
+    {
+      "uri": "ui://mcp-modelica/run-list-viewer",
+      "ownership": "whole-view",
+      "resultSchemas": [
+        "io.casys.mcp-modelica.run-list-result/1.0",
+        "io.casys.mcp-modelica.run-list-result/2.0"
+      ],
+      "acceptedActions": [
+        "viewer.session.apply"
+      ],
+      "sessionSchemas": [
+        "io.casys.mcp-modelica.recorded-results-session/1.0"
+      ]
+    }
+  ]
+}

@@ -345,6 +345,11 @@ is buffered rather than lost. Provenance accepts only the registered
 recorded artifact identity to every projected run and verifies a separate SHA-256 over the raw
 canonical projection. It cannot relabel foreign evidence or derive detail from a fingerprint.
 
+The same provider-owned compatibility declaration is serialized at
+[`src/ui/view-app-manifest.json`](src/ui/view-app-manifest.json) and exported by the package as
+`./view-app-manifest`. It contains only the App identity and compatibility contract: no recorded
+session, project anchor, provider endpoint, credentials, or live-tool policy.
+
 The run viewer advertises small, App-owned components rather than alternate size modes:
 `modelica.run-summary`, `modelica.run-identity`, `modelica.execution-status`, `modelica.metrics`,
 `modelica.parameters`, `modelica.provenance`, `modelica.artifacts`, and `modelica.warnings`. The

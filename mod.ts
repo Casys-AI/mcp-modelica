@@ -35,6 +35,7 @@ export {
   MODELICA_RUN_LIST_VIEWER_URI,
 } from "./src/tools/results.ts";
 export {
+  isModelicaRecordedViewSessionInputForResource,
   loadModelicaRunDetail,
   MODELICA_RECORDED_OPERATIONS,
   MODELICA_RECORDED_VIEW_SESSION_SCHEMA,
@@ -106,4 +107,5 @@ export type {
   ModelicaRecordedSessionStatus,
   ModelicaRecordedViewProjection,
   ModelicaRecordedViewSession,
+  ModelicaRecordedViewSessionInput,
 } from "./src/ui/results-viewer/src/recorded-session.ts";
