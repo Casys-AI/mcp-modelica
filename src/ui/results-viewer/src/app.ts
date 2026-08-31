@@ -1,19 +1,23 @@
 /// <reference lib="dom" />
 
+import { createMcpApp, defineView } from "@casys/mcp-view";
+import type { AppContext, AppHandle } from "@casys/mcp-view";
 import {
-  advertisedComponentCatalog,
-  createMcpApp,
-  defineView,
+  componentCatalogCapabilities,
   installMcpViewTheme,
   mountComponentSurface,
   readSurfaceContext,
-} from "@casys/mcp-view";
+} from "@casys/mcp-view-components";
 import type {
-  AppContext,
   ComponentSurface,
   MountedComponentSurface,
   ViewComponentRegistry,
-} from "@casys/mcp-view";
+} from "@casys/mcp-view-components";
+import {
+  type ActiveWholeView,
+  createWholeViewTransitionCoordinator,
+  remountActiveWholeView,
+} from "./active-whole-view.ts";
 import { createRunComponentRegistry, createRunListComponentRegistry } from "./components.tsx";
 import {
   type DisplayState,
@@ -23,10 +27,35 @@ import {
   type RunSummary,
   type SimulationRun,
 } from "./model.ts";
+import {
+  loadModelicaRunDetail,
+  MODELICA_VIEW_APP_INFO,
+  type ModelicaRecordedSessionStatus,
+  type ModelicaRecordedViewSession,
+  modelicaSessionResource,
+  parseModelicaRecordedViewSession,
+} from "./recorded-session.ts";
 import { escapeHtml } from "./render.ts";
+import { createLatestSurfaceMountLifecycle } from "./surface-mount-lifecycle.ts";
+import { resolveWholeViewSurfacePolicy } from "./whole-view-surface-policy.ts";
+
+type DetailData =
+  | { run: SimulationRun; localDrilldown: boolean }
+  | { recordedStatus: ModelicaRecordedSessionStatus; message: string }
+  | { error: string };
+
+type DetailArgs =
+  | ResultsEnvelope
+  | { runId: string; recorded: boolean }
+  | { resolvedDetail: DetailData };
 
 export interface ResultsViewerState {
   display: DisplayState;
+  recordedSession?: ModelicaRecordedViewSession;
+  activeWholeView?: ActiveWholeView<
+    Extract<ResultsEnvelope, { kind: "run-list" }>,
+    DetailData
+  >;
 }
 
 export interface ResultsViewerOptions {
@@ -36,10 +65,12 @@ export interface ResultsViewerOptions {
 
 type ViewerContext = AppContext<ResultsViewerState>;
 
-let mountedSurface: MountedComponentSurface | undefined;
-let mountGeneration = 0;
+const surfaceMounts = createLatestSurfaceMountLifecycle<MountedComponentSurface>();
 
 const statusView = defineView<ResultsViewerState>({
+  onEnter(ctx) {
+    ctx.state.activeWholeView = { name: "status" };
+  },
   async onLeave() {
     await disposeMountedSurface();
   },
@@ -65,6 +96,13 @@ const statusView = defineView<ResultsViewerState>({
         }</div></div>`,
       );
     }
+    if (display.kind === "recorded-status") {
+      return shell(
+        "Recorded simulation projection",
+        recordedState(display.status, display.message),
+        "RECORDED",
+      );
+    }
     return shell(
       "Simulation evidence",
       emptyState("No displayable Modelica evidence is available."),
@@ -76,66 +114,100 @@ function createListView(
   registry: ViewComponentRegistry<RunSummary[], ViewerContext>,
 ) {
   return defineView<ResultsViewerState, ResultsEnvelope, RunSummary[]>({
-    onEnter(_ctx, envelope) {
+    onEnter(ctx, envelope) {
       if (envelope.kind !== "run-list") {
         throw new TypeError("Expected a Modelica run-list envelope.");
       }
+      ctx.state.activeWholeView = { name: "list", envelope };
       return envelope.runs;
     },
     async onLeave() {
       await disposeMountedSurface();
     },
     render(ctx, runs) {
+      const recorded = ctx.state.recordedSession !== undefined;
       if (runs.length === 0) {
         return shell(
           "Persisted simulation runs",
           emptyState("No persisted simulation runs were returned."),
+          recorded ? "RECORDED" : "EVIDENCE",
         );
       }
+      const presentation = resolveWholeViewSurfacePolicy({
+        recorded,
+        hostSelectedSurface: hasRequestedSurface(ctx),
+        defaultSurface: registry.defaultSurface,
+      });
       const { node, target } = componentShell(
         "Persisted simulation runs",
-        hasRequestedSurface(ctx),
+        presentation.componentOnly,
+        recorded,
       );
-      scheduleSurfaceMount(target, registry, runs, ctx);
+      scheduleSurfaceMount(target, registry, runs, ctx, presentation.surface);
       return node;
     },
   });
 }
-
-type DetailArgs = ResultsEnvelope | { runId: string; recorded: boolean };
-type DetailData =
-  | { run: SimulationRun; localDrilldown: boolean }
-  | { error: string };
 
 function createDetailView(
   registry: ViewComponentRegistry<SimulationRun, ViewerContext>,
 ) {
   return defineView<ResultsViewerState, DetailArgs, DetailData>({
     async onEnter(ctx, args) {
+      const remember = (data: DetailData): DetailData => {
+        ctx.state.activeWholeView = { name: "detail", data };
+        return data;
+      };
+      if ("resolvedDetail" in args) return remember(args.resolvedDetail);
       if (!("runId" in args)) {
-        if (args.kind === "run") return { run: args.run, localDrilldown: false };
+        if (args.kind === "run") return remember({ run: args.run, localDrilldown: false });
         throw new TypeError("A run-list cannot be rendered as a run detail.");
       }
+      // Suspend remounting before the first await. Otherwise a host-context
+      // change can capture the previous list while this drill-down is loading
+      // and navigate back to it after the detail has resolved.
+      ctx.state.activeWholeView = { name: "pending-detail" };
       try {
-        const result = await ctx.callTool(
-          args.recorded ? "modelica_run_get_recorded" : "modelica_run_get",
-          { run_id: args.runId },
+        const detail = await loadModelicaRunDetail(
+          ctx.state.recordedSession,
+          args.runId,
+          async () => {
+            const result = await ctx.callTool(
+              args.recorded ? "modelica_run_get_recorded" : "modelica_run_get",
+              { run_id: args.runId },
+            );
+            if (result.isError) throw new Error(errorMessage(result));
+            return parseResultsEnvelope(result.structuredContent);
+          },
         );
-        if (result.isError) return { error: errorMessage(result) };
-        const envelope = parseResultsEnvelope(result.structuredContent);
-        return envelope.kind === "run"
-          ? { run: envelope.run, localDrilldown: true }
-          : { error: "The server returned a run list instead of one run." };
+        return remember(
+          detail.status === "available" ? { run: detail.result.run, localDrilldown: true } : {
+            recordedStatus: detail.status,
+            message: "reason" in detail
+              ? detail.reason
+              : defaultRecordedStatusMessage(detail.status),
+          },
+        );
       } catch (error) {
-        return {
+        return remember({
           error: error instanceof Error ? error.message : "The run could not be retrieved.",
-        };
+        });
       }
     },
     async onLeave() {
       await disposeMountedSurface();
     },
     render(ctx, data) {
+      if ("recordedStatus" in data) {
+        const { node, target, masthead } = componentShell(
+          "Simulation evidence",
+          false,
+          true,
+        );
+        addListBackButton(ctx, node, masthead);
+        target.innerHTML = recordedState(data.recordedStatus, data.message);
+        return node;
+      }
       if ("error" in data) {
         return shell(
           "Simulation evidence",
@@ -144,28 +216,25 @@ function createDetailView(
           }</div></div>`,
         );
       }
+      const recorded = ctx.state.recordedSession !== undefined;
+      const presentation = resolveWholeViewSurfacePolicy({
+        recorded,
+        hostSelectedSurface: hasRequestedSurface(ctx),
+        defaultSurface: registry.defaultSurface,
+        preferDefaultSurface: data.localDrilldown,
+      });
       const { node, target, masthead } = componentShell(
         "Simulation evidence",
-        hasRequestedSurface(ctx),
+        presentation.componentOnly,
+        recorded,
       );
-      if (ctx.state.display.kind === "run-list") {
-        const back = document.createElement("button");
-        back.className = "mcp-view-button";
-        back.type = "button";
-        back.textContent = "All runs";
-        back.addEventListener("click", () => {
-          const display = ctx.state.display;
-          if (display.kind === "run-list") void ctx.navigate("list", display);
-        });
-        masthead.prepend(back);
-        if (masthead.parentElement === null) node.prepend(masthead);
-      }
+      addListBackButton(ctx, node, masthead);
       scheduleSurfaceMount(
         target,
         registry,
         data.run,
         ctx,
-        data.localDrilldown ? registry.defaultSurface : undefined,
+        presentation.surface,
       );
       return node;
     },
@@ -175,64 +244,131 @@ function createDetailView(
 export async function bootResultsViewer(options: ResultsViewerOptions): Promise<void> {
   const root = document.getElementById("root");
   if (!root) throw new Error("The results viewer root is missing.");
+  const viewerRoot: HTMLElement = root;
   installMcpViewTheme();
   const runRegistry = createRunComponentRegistry();
   const listRegistry = createRunListComponentRegistry();
-  const componentCatalog = options.resource === "run"
-    ? advertisedComponentCatalog(runRegistry)
-    : advertisedComponentCatalog(listRegistry);
+  const componentCapabilities = options.resource === "run"
+    ? componentCatalogCapabilities(runRegistry)
+    : componentCatalogCapabilities(listRegistry);
   const listView = createListView(listRegistry);
   const detailView = createDetailView(runRegistry);
+  const wholeViewTransitions = createWholeViewTransitionCoordinator();
 
   let removeHostContextListener = () => {};
-  const app = await createMcpApp<ResultsViewerState>({
-    info: { name: "Modelica Results Viewer", version: "1.0.0" },
+  const applyRecordedSession = async (
+    session: ModelicaRecordedViewSession,
+    app: AppHandle<ResultsViewerState>,
+  ): Promise<void> => {
+    await wholeViewTransitions.replace(async () => {
+      if (modelicaSessionResource(session) !== options.resource) {
+        throw new TypeError(
+          `This Modelica resource accepts ${options.resource} sessions only.`,
+        );
+      }
+      app.ctx.state.recordedSession = session;
+      viewerRoot.setAttribute("aria-busy", "false");
+      if (session.projection.status !== "available") {
+        app.ctx.state.display = {
+          kind: "recorded-status",
+          status: session.projection.status,
+          message: "reason" in session.projection
+            ? session.projection.reason
+            : defaultRecordedStatusMessage(session.projection.status),
+        };
+        await app.navigate("status");
+        return;
+      }
+      const envelope = session.projection.result;
+      app.ctx.state.display = envelope.kind === "run-list" && envelope.runs.length === 0
+        ? { kind: "empty" }
+        : envelope;
+      await app.navigate(envelope.kind === "run-list" ? "list" : "detail", envelope);
+    });
+  };
+  const reportRecordedSessionError = async (
+    error: unknown,
+    app: AppHandle<ResultsViewerState>,
+  ): Promise<void> => {
+    await wholeViewTransitions.replace(async () => {
+      app.ctx.state.recordedSession = undefined;
+      app.ctx.state.display = {
+        kind: "error",
+        message: error instanceof Error
+          ? error.message
+          : "The recorded Modelica session could not be read.",
+      };
+      viewerRoot.setAttribute("aria-busy", "false");
+      await app.navigate("status");
+    });
+  };
+
+  const app = await createMcpApp<ResultsViewerState, unknown>({
+    info: MODELICA_VIEW_APP_INFO,
     root,
     views: { status: statusView, list: listView, detail: detailView },
     initialView: "status",
     initialState: { display: { kind: "loading" } },
-    componentCatalog,
+    capabilities: { experimental: componentCapabilities },
+    viewerSession: {
+      // The strict projection fingerprint uses asynchronous WebCrypto. Admit the opaque transport
+      // payload into the core FIFO, then parse it fully before any state or navigation changes.
+      validate: (_value: unknown): _value is unknown => true,
+      async onSession(value, _payload, app) {
+        try {
+          await applyRecordedSession(await parseModelicaRecordedViewSession(value), app);
+        } catch (error) {
+          await reportRecordedSessionError(error, app);
+        }
+      },
+    },
     async onToolInput(_input, app) {
-      root.setAttribute("aria-busy", "true");
-      app.ctx.state.display = { kind: "loading" };
-      await app.navigate("status");
+      await wholeViewTransitions.replace(async () => {
+        root.setAttribute("aria-busy", "true");
+        app.ctx.state.recordedSession = undefined;
+        app.ctx.state.display = { kind: "loading" };
+        await app.navigate("status");
+      });
     },
     async onToolResult(result, app) {
-      root.setAttribute("aria-busy", "false");
-      if (result.isError) {
-        app.ctx.state.display = { kind: "error", message: errorMessage(result) };
-        await app.navigate("status");
-        return;
-      }
-      try {
-        const envelope = parseResultsEnvelope(result.structuredContent);
-        app.ctx.state.display = envelope.kind === "run-list" && envelope.runs.length === 0
-          ? { kind: "empty" }
-          : envelope;
-        await app.navigate(envelope.kind === "run-list" ? "list" : "detail", envelope);
-      } catch (error) {
-        app.ctx.state.display = {
-          kind: "error",
-          message: error instanceof Error
-            ? error.message
-            : "The Modelica result could not be read.",
-        };
-        await app.navigate("status");
-      }
+      await wholeViewTransitions.replace(async () => {
+        root.setAttribute("aria-busy", "false");
+        app.ctx.state.recordedSession = undefined;
+        if (result.isError) {
+          app.ctx.state.display = { kind: "error", message: errorMessage(result) };
+          await app.navigate("status");
+          return;
+        }
+        try {
+          const envelope = parseResultsEnvelope(result.structuredContent);
+          app.ctx.state.display = envelope.kind === "run-list" && envelope.runs.length === 0
+            ? { kind: "empty" }
+            : envelope;
+          await app.navigate(envelope.kind === "run-list" ? "list" : "detail", envelope);
+        } catch (error) {
+          app.ctx.state.display = {
+            kind: "error",
+            message: error instanceof Error
+              ? error.message
+              : "The Modelica result could not be read.",
+          };
+          await app.navigate("status");
+        }
+      });
     },
     async onTeardown() {
       removeHostContextListener();
+      await wholeViewTransitions.replace(() => {});
       await disposeMountedSurface();
     },
   });
   const remountSelectedSurface = () => {
-    const display = app.ctx.state.display;
-    const navigation = display.kind === "run-list"
-      ? app.navigate("list", display)
-      : display.kind === "run"
-      ? app.navigate("detail", display)
-      : undefined;
-    navigation?.catch((error) => console.error("Unable to remount the Modelica surface", error));
+    void wholeViewTransitions.remount(async () => {
+      await remountActiveWholeView(app.ctx.state.activeWholeView, {
+        list: (envelope) => app.navigate("list", envelope),
+        detail: (data) => app.navigate("detail", { resolvedDetail: data }),
+      });
+    }).catch((error) => console.error("Unable to remount the Modelica surface", error));
   };
   app.ctx.app.addEventListener("hostcontextchanged", remountSelectedSurface);
   removeHostContextListener = () => {
@@ -254,7 +390,7 @@ export function startResultsViewer(options: ResultsViewerOptions): void {
   });
 }
 
-function componentShell(title: string, componentOnly: boolean): {
+function componentShell(title: string, componentOnly: boolean, recorded = false): {
   node: HTMLElement;
   target: HTMLElement;
   masthead: HTMLElement;
@@ -270,7 +406,9 @@ function componentShell(title: string, componentOnly: boolean): {
     masthead.innerHTML =
       `<div class="mcp-view-card-heading"><p class="mcp-view-card-eyebrow">MCP / MODELICA</p><h2 class="mcp-view-card-title">${
         escapeHtml(title)
-      }</h2></div><div class="mcp-view-card-actions"><span class="mcp-view-badge" data-tone="info">EVIDENCE</span></div>`;
+      }</h2></div><div class="mcp-view-card-actions"><span class="mcp-view-badge" data-tone="info">${
+        recorded ? "RECORDED" : "EVIDENCE"
+      }</span></div>`;
   }
   const target = document.createElement("div");
   target.className = "component-surface-host";
@@ -291,40 +429,74 @@ function scheduleSurfaceMount<TData>(
   ctx: ViewerContext,
   surface?: ComponentSurface,
 ): void {
-  const generation = ++mountGeneration;
-  queueMicrotask(async () => {
-    if (generation !== mountGeneration) return;
-    try {
-      await disposeMountedSurface(false);
-      if (generation !== mountGeneration) return;
-      mountedSurface = await mountComponentSurface({
+  void surfaceMounts.schedule(
+    () =>
+      mountComponentSurface({
         root: target,
         registry,
         data,
         appContext: ctx,
         hostContext: ctx.hostContext,
         ...(surface ? { surface } : {}),
-      });
-    } catch (error) {
+      }),
+    (error) => {
       target.innerHTML =
         `<div class="mcp-view-state" data-tone="danger" role="alert"><strong>Unable to compose components</strong><div class="mcp-view-state-detail">${
           escapeHtml(error instanceof Error ? error.message : "The component surface failed.")
         }</div></div>`;
-    }
-  });
+    },
+  );
 }
 
 async function disposeMountedSurface(invalidate = true): Promise<void> {
-  if (invalidate) mountGeneration++;
-  const mounted = mountedSurface;
-  mountedSurface = undefined;
-  await mounted?.dispose();
+  await surfaceMounts.dispose(invalidate);
 }
 
-function shell(title: string, content: string): string {
-  return `<section class="mcp-view-card modelica-shell" aria-label="Modelica simulation results"><header class="mcp-view-card-header"><div class="mcp-view-card-heading"><p class="mcp-view-card-eyebrow">MCP / MODELICA</p><h2 class="mcp-view-card-title">${title}</h2></div><div class="mcp-view-card-actions"><span class="mcp-view-badge" data-tone="info">EVIDENCE</span></div></header>${content}</section>`;
+function shell(title: string, content: string, badge = "EVIDENCE"): string {
+  return `<section class="mcp-view-card modelica-shell" aria-label="Modelica simulation results"><header class="mcp-view-card-header"><div class="mcp-view-card-heading"><p class="mcp-view-card-eyebrow">MCP / MODELICA</p><h2 class="mcp-view-card-title">${title}</h2></div><div class="mcp-view-card-actions"><span class="mcp-view-badge" data-tone="info">${badge}</span></div></header>${content}</section>`;
 }
 
 function emptyState(message: string): string {
   return `<div class="mcp-view-state"><strong>No evidence to display</strong><div class="mcp-view-state-detail">${message}</div></div>`;
+}
+
+function recordedState(status: ModelicaRecordedSessionStatus, message: string): string {
+  return `<div class="modelica-recorded-state" data-status="${status}" role="status"><span class="modelica-recorded-state-dot" aria-hidden="true"></span><div><strong><code>${status}</code></strong><div class="mcp-view-state-detail">${
+    escapeHtml(message)
+  }</div></div></div>`;
+}
+
+function defaultRecordedStatusMessage(status: ModelicaRecordedSessionStatus): string {
+  switch (status) {
+    case "pending":
+      return "The recorded simulation projection is pending.";
+    case "running":
+      return "The recorded simulation projection is running.";
+    case "rejected":
+      return "The recorded simulation request was rejected.";
+    case "recovery_required":
+      return "The recorded simulation requires recovery before detail is available.";
+    case "unresolved":
+      return "The recorded simulation projection is unresolved.";
+    case "unavailable":
+      return "Recorded simulation detail is unavailable.";
+  }
+}
+
+function addListBackButton(
+  ctx: ViewerContext,
+  node: HTMLElement,
+  masthead: HTMLElement,
+): void {
+  if (ctx.state.display.kind !== "run-list") return;
+  const back = document.createElement("button");
+  back.className = "mcp-view-button modelica-back-button";
+  back.type = "button";
+  back.textContent = "‹ All runs";
+  back.addEventListener("click", () => {
+    const display = ctx.state.display;
+    if (display.kind === "run-list") void ctx.navigate("list", display);
+  });
+  masthead.prepend(back);
+  if (masthead.parentElement === null) node.prepend(masthead);
 }

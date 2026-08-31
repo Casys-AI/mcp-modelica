@@ -1,18 +1,19 @@
 /** @jsxImportSource preact */
 /// <reference lib="dom" />
 
-import { defineComponentRegistry } from "@casys/mcp-view";
-import type { AppContext, ViewComponentRegistry } from "@casys/mcp-view";
+import type { AppContext } from "@casys/mcp-view";
+import { defineComponentRegistry } from "@casys/mcp-view-components";
+import type { ViewComponentRegistry } from "@casys/mcp-view-components";
+import { definePreactComponent } from "@casys/mcp-view-components/preact";
 import {
   Badge,
   Card,
   DataTable,
-  definePreactComponent,
   EmptyState,
   KeyValueList,
   MetricGrid,
   StateMessage,
-} from "@casys/mcp-view/preact";
+} from "@casys/mcp-view-components/preact/components";
 import type { ResultsViewerState } from "./app.ts";
 import type { RunSummary, SimulationRun } from "./model.ts";
 import { formatTimestamp } from "./render.ts";

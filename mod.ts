@@ -32,7 +32,22 @@ export {
   MODELICA_RECORDED_RESULTS_SCHEMA_VERSION,
   MODELICA_RESULTS_SCHEMA_VERSION,
   MODELICA_RESULTS_VIEWER_URI,
+  MODELICA_RUN_LIST_VIEWER_URI,
 } from "./src/tools/results.ts";
+export {
+  loadModelicaRunDetail,
+  MODELICA_RECORDED_OPERATIONS,
+  MODELICA_RECORDED_VIEW_SESSION_SCHEMA,
+  MODELICA_RESULT_SCHEMA_IDS,
+  MODELICA_VIEW_APP_INFO,
+  MODELICA_VIEW_APP_MANIFEST,
+  modelicaProjectionSha256,
+  modelicaSessionResource,
+  parseModelicaRecordedViewSession,
+  resolveModelicaRecordedRunDetail,
+  VIEW_APP_MANIFEST_SCHEMA,
+  VIEWER_SESSION_APPLY_ACTION,
+} from "./src/ui/results-viewer/src/recorded-session.ts";
 export {
   MODELICA_RESUMABLE_RESULTS_SCHEMA_VERSION,
   sealedResultSeriesOutputSchema,
@@ -85,3 +100,10 @@ export type {
   ModelicaRunListResultEnvelope,
   ModelicaRunResultEnvelope,
 } from "./src/tools/results.ts";
+export type {
+  ModelicaRecordedOperation,
+  ModelicaRecordedRunDetailProjection,
+  ModelicaRecordedSessionStatus,
+  ModelicaRecordedViewProjection,
+  ModelicaRecordedViewSession,
+} from "./src/ui/results-viewer/src/recorded-session.ts";

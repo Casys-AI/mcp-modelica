@@ -1,5 +1,17 @@
-import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
+import { assertEquals, assertRejects, assertStringIncludes, assertThrows } from "@std/assert";
+import { PACKAGE_VERSION } from "../../../release-identity.ts";
 import { errorMessage, parseResultsEnvelope, type SimulationRun } from "./model.ts";
+import {
+  loadModelicaRunDetail,
+  MODELICA_RECORDED_OPERATIONS,
+  MODELICA_RECORDED_VIEW_SESSION_SCHEMA,
+  MODELICA_RESULT_SCHEMA_IDS,
+  MODELICA_VIEW_APP_MANIFEST,
+  modelicaProjectionSha256,
+  parseModelicaRecordedViewSession,
+  resolveModelicaRecordedRunDetail,
+  VIEWER_SESSION_APPLY_ACTION,
+} from "./recorded-session.ts";
 import { escapeHtml, formatQuantity, formatTimestamp } from "./render.ts";
 
 const run: SimulationRun = {
@@ -51,6 +63,30 @@ Deno.test("results viewer parses the explicit v2 run and run-list envelopes", ()
   );
 });
 
+Deno.test("results parser rejects sparse and adorned arrays before iteration", () => {
+  const sparseRuns = new Array(1);
+  assertThrows(
+    () => parseResultsEnvelope({ schemaVersion: "2.0", kind: "run-list", runs: sparseRuns }),
+    TypeError,
+    "Expected a Modelica run or run-list envelope",
+  );
+
+  const adornedArtifacts = [...run.artifacts] as SimulationRun["artifacts"] & {
+    source?: string;
+  };
+  adornedArtifacts.source = "host-decoration";
+  assertThrows(
+    () =>
+      parseResultsEnvelope({
+        schemaVersion: "2.0",
+        kind: "run",
+        run: { ...run, artifacts: adornedArtifacts },
+      }),
+    TypeError,
+    "Expected a Modelica run or run-list envelope",
+  );
+});
+
 Deno.test("results viewer normalizes v1 without inventing native scenario provenance", () => {
   const legacy = {
     status: run.status,
@@ -93,6 +129,487 @@ Deno.test("results viewer formatting is truthful and HTML-safe", () => {
 Deno.test("component styles contain no projection-mode selectors", async () => {
   const styles = await Deno.readTextFile(new URL("./styles.css", import.meta.url));
   assertStringIncludes(styles, ".component-surface-host");
+  assertStringIncludes(styles, "var(--font-sans");
+  assertEquals(styles.includes("Inter"), false);
   assertEquals(styles.includes("data-casys-projection"), false);
   assertEquals(styles.includes("glance"), false);
 });
+
+Deno.test("Modelica publishes whole-view recorded-session declarations", () => {
+  assertEquals(MODELICA_VIEW_APP_MANIFEST.schemaVersion, "io.casys.mcp.view-app-manifest/1.0");
+  assertEquals(MODELICA_VIEW_APP_MANIFEST.app, {
+    id: "io.casys.mcp-modelica.results",
+    title: "Modelica results",
+    version: PACKAGE_VERSION,
+  });
+  assertEquals(
+    MODELICA_VIEW_APP_MANIFEST.resources.map((resource) => ({
+      uri: resource.uri,
+      ownership: resource.ownership,
+      acceptedActions: resource.acceptedActions,
+      sessionSchemas: resource.sessionSchemas,
+    })),
+    [
+      {
+        uri: "ui://mcp-modelica/results-viewer",
+        ownership: "whole-view",
+        acceptedActions: [VIEWER_SESSION_APPLY_ACTION],
+        sessionSchemas: [MODELICA_RECORDED_VIEW_SESSION_SCHEMA],
+      },
+      {
+        uri: "ui://mcp-modelica/run-list-viewer",
+        ownership: "whole-view",
+        acceptedActions: [VIEWER_SESSION_APPLY_ACTION],
+        sessionSchemas: [MODELICA_RECORDED_VIEW_SESSION_SCHEMA],
+      },
+    ],
+  );
+  assertEquals(MODELICA_VIEW_APP_MANIFEST.resources[0].resultSchemas, [
+    MODELICA_RESULT_SCHEMA_IDS.legacyRun,
+    MODELICA_RESULT_SCHEMA_IDS.recordedRun,
+  ]);
+  assertEquals(MODELICA_VIEW_APP_MANIFEST.resources[1].resultSchemas, [
+    MODELICA_RESULT_SCHEMA_IDS.legacyRunList,
+    MODELICA_RESULT_SCHEMA_IDS.recordedRunList,
+  ]);
+});
+
+Deno.test("recorded session accepts exact 2.0 list detail and never calls the standalone loader", async () => {
+  const session = await parseModelicaRecordedViewSession(
+    await recordedListSession({
+      result: {
+        schemaVersion: "2.0",
+        kind: "run-list",
+        runs: [recordedSummary(run)],
+      },
+      details: [{
+        run_id: run.run_id,
+        status: "available",
+        result: { schemaVersion: "2.0", kind: "run", run },
+      }],
+    }),
+  );
+  let loaderCalls = 0;
+  const detail = await loadModelicaRunDetail(session, run.run_id, () => {
+    loaderCalls++;
+    throw new Error("recorded mode must not call the Modelica server");
+  });
+  assertEquals(loaderCalls, 0);
+  assertEquals(detail.status, "available");
+  if (detail.status !== "available") throw new Error("Expected recorded detail.");
+  assertEquals(detail.result.schemaVersion, "2.0");
+  assertEquals(detail.result.run, run);
+});
+
+Deno.test("recorded session accepts an exact 1.0 detail without inventing 2.0 provenance", async () => {
+  const legacyRun = legacyRunEnvelopeValue();
+  const session = await parseModelicaRecordedViewSession(
+    await recordedListSession({
+      result: {
+        schemaVersion: "1.0",
+        kind: "run-list",
+        runs: [legacySummary(legacyRun)],
+      },
+      details: [{
+        run_id: run.run_id,
+        status: "available",
+        result: { schemaVersion: "1.0", kind: "run", run: legacyRun },
+      }],
+    }),
+  );
+  const detail = resolveModelicaRecordedRunDetail(session, run.run_id);
+  assertEquals(detail.status, "available");
+  if (detail.status !== "available") throw new Error("Expected recorded detail.");
+  assertEquals(detail.result.schemaVersion, "1.0");
+  assertEquals(detail.result.run.scenario.source_sha256, undefined);
+  assertEquals(detail.result.run.parameter_schema, undefined);
+  assertEquals(detail.result.run.result_normalizer, undefined);
+});
+
+Deno.test("recorded session preserves terminal and in-flight states literally", async () => {
+  const projections = [
+    { status: "pending" },
+    { status: "running" },
+    { status: "rejected", reason: "manifest_mismatch" },
+    { status: "recovery_required", reason: "writer acknowledgement is uncertain" },
+    { status: "unavailable", reason: "detail was not recorded" },
+  ] as const;
+  for (const projection of projections) {
+    const parsed = await parseModelicaRecordedViewSession(await recordedSession(projection));
+    assertEquals(parsed.projection.status, projection.status);
+  }
+});
+
+Deno.test("recorded list drill-down fails visibly unavailable when detail is absent", async () => {
+  const session = await parseModelicaRecordedViewSession(
+    await recordedListSession({
+      result: {
+        schemaVersion: "2.0",
+        kind: "run-list",
+        runs: [recordedSummary(run)],
+      },
+      details: [],
+    }),
+  );
+  let loaderCalls = 0;
+  const detail = await loadModelicaRunDetail(session, run.run_id, () => {
+    loaderCalls++;
+    return Promise.resolve({ schemaVersion: "2.0", kind: "run", run });
+  });
+  assertEquals(loaderCalls, 0);
+  assertEquals(detail, {
+    run_id: run.run_id,
+    status: "unavailable",
+    reason: "Recorded detail was not supplied by the host.",
+  });
+});
+
+Deno.test("recorded session rejects derived curves and hash-only pseudo-detail", async () => {
+  const withCurves = await recordedListSession({
+    result: {
+      schemaVersion: "2.0",
+      kind: "run-list",
+      runs: [recordedSummary(run)],
+    },
+    details: [],
+  });
+  (withCurves.projection as Record<string, unknown>).curves = [{ source: run.fingerprint }];
+  await assertRejects(
+    () => parseModelicaRecordedViewSession(withCurves),
+    TypeError,
+    "unsupported fields",
+  );
+
+  const detailWithCurves = await recordedListSession({
+    result: {
+      schemaVersion: "2.0",
+      kind: "run-list",
+      runs: [recordedSummary(run)],
+    },
+    details: [{
+      run_id: run.run_id,
+      status: "available",
+      result: {
+        schemaVersion: "2.0",
+        kind: "run",
+        run: { ...run, curves: [{ source: run.fingerprint }] },
+      },
+    }],
+  });
+  await assertRejects(
+    () => parseModelicaRecordedViewSession(detailWithCurves),
+    TypeError,
+    "Expected a Modelica run or run-list envelope",
+  );
+
+  const hashOnly = await recordedListSession({
+    result: {
+      schemaVersion: "2.0",
+      kind: "run-list",
+      runs: [recordedSummary(run)],
+    },
+    details: [{
+      run_id: run.run_id,
+      status: "available",
+      result: {
+        schemaVersion: "2.0",
+        kind: "run",
+        run: { run_id: run.run_id, fingerprint: run.fingerprint },
+      },
+    }],
+  });
+  await assertRejects(
+    () => parseModelicaRecordedViewSession(hashOnly),
+    TypeError,
+    "Expected a Modelica run or run-list envelope",
+  );
+});
+
+Deno.test("recorded session rejects foreign operations and unbound artifact identities", async () => {
+  assertEquals(MODELICA_RECORDED_OPERATIONS, [
+    "simulate.run-qualified-modelica-kit@1",
+    "simulate.run-admitted-modelica@1",
+  ]);
+
+  const foreignOperation = await recordedListSession({
+    result: {
+      schemaVersion: "2.0",
+      kind: "run-list",
+      runs: [recordedSummary(run)],
+    },
+    details: [],
+  });
+  foreignOperation.provenance.recordedOperation = "verify.run-fea-static-proof@3";
+  await assertRejects(
+    () => parseModelicaRecordedViewSession(foreignOperation),
+    TypeError,
+    "operation is not compatible",
+  );
+
+  const missingArtifact = await recordedListSession({
+    result: {
+      schemaVersion: "2.0",
+      kind: "run-list",
+      runs: [recordedSummary(run)],
+    },
+    details: [],
+  });
+  missingArtifact.provenance.recordedArtifacts = [];
+  await assertRejects(
+    () => parseModelicaRecordedViewSession(missingArtifact),
+    TypeError,
+    "exactly one artifact per projected run",
+  );
+
+  const surplusArtifact = await recordedListSession({
+    result: {
+      schemaVersion: "2.0",
+      kind: "run-list",
+      runs: [recordedSummary(run)],
+    },
+    details: [],
+  });
+  surplusArtifact.provenance.recordedArtifacts.push({
+    artifactId: "artifact-surplus",
+    runId: "run-surplus",
+    runFingerprint: "8".repeat(64),
+  });
+  await assertRejects(
+    () => parseModelicaRecordedViewSession(surplusArtifact),
+    TypeError,
+    "exactly one artifact per projected run",
+  );
+
+  const mismatchedArtifact = await recordedListSession({
+    result: {
+      schemaVersion: "2.0",
+      kind: "run-list",
+      runs: [recordedSummary(run)],
+    },
+    details: [],
+  });
+  mismatchedArtifact.provenance.recordedArtifacts[0]!.runFingerprint = "9".repeat(64);
+  await assertRejects(
+    () => parseModelicaRecordedViewSession(mismatchedArtifact),
+    TypeError,
+    "artifact identity differs",
+  );
+});
+
+Deno.test("recorded session verifies the fingerprint of the raw projection", async () => {
+  const session = await recordedSession({ status: "pending" });
+  session.projection = { status: "running" };
+  await assertRejects(
+    () => parseModelicaRecordedViewSession(session),
+    TypeError,
+    "projectionSha256 does not match",
+  );
+});
+
+Deno.test("recorded parser and projection hash reject sparse or adorned arrays", async () => {
+  const sparseDetails = new Array(1);
+  const sparseSession = await recordedListSession({
+    result: { schemaVersion: "2.0", kind: "run-list", runs: [] },
+    details: [],
+  });
+  (sparseSession.projection as { details: unknown[] }).details = sparseDetails;
+  await assertRejects(
+    () => parseModelicaRecordedViewSession(sparseSession),
+    TypeError,
+    "details must be a dense JSON array",
+  );
+  await assertRejects(
+    () => modelicaProjectionSha256({ values: sparseDetails }),
+    TypeError,
+    "dense JSON arrays only",
+  );
+
+  const adornedArtifacts = [] as
+    & Array<{
+      artifactId: string;
+      runId: string;
+      runFingerprint: string;
+    }>
+    & { source?: string };
+  adornedArtifacts.source = "host-decoration";
+  const adornedSession = await recordedSession({ status: "pending" });
+  adornedSession.provenance.recordedArtifacts = adornedArtifacts;
+  await assertRejects(
+    () => parseModelicaRecordedViewSession(adornedSession),
+    TypeError,
+    "provenance recordedArtifacts must be a dense JSON array",
+  );
+  await assertRejects(
+    () => modelicaProjectionSha256({ values: adornedArtifacts }),
+    TypeError,
+    "dense JSON arrays only",
+  );
+});
+
+Deno.test("recorded detail must repeat every run-list summary fact exactly", async () => {
+  const drifts: Array<[string, (detail: SimulationRun) => void]> = [
+    ["status", (detail) => detail.status = "failed"],
+    ["fingerprint", (detail) => detail.fingerprint = "9".repeat(64)],
+    ["model", (detail) => detail.model = { ...detail.model, id: "foreign-model" }],
+    ["scenario", (detail) => detail.scenario = { ...detail.scenario, id: "foreign-scenario" }],
+    ["started_at", (detail) => detail.started_at = "2026-07-31T07:59:59.000Z"],
+    ["completed_at", (detail) => detail.completed_at = "2026-07-31T08:00:04.000Z"],
+  ];
+  for (const [field, mutate] of drifts) {
+    const detail = structuredClone(run);
+    mutate(detail);
+    const session = await recordedListSession({
+      result: {
+        schemaVersion: "2.0",
+        kind: "run-list",
+        runs: [recordedSummary(run)],
+      },
+      details: [{
+        run_id: run.run_id,
+        status: "available",
+        result: { schemaVersion: "2.0", kind: "run", run: detail },
+      }],
+    });
+    await assertRejects(
+      () => parseModelicaRecordedViewSession(session),
+      TypeError,
+      "detail facts differ",
+      field,
+    );
+  }
+
+  const foreignRunId = structuredClone(run);
+  foreignRunId.run_id = "run_11111111-1111-4111-8111-111111111111";
+  const session = await recordedListSession({
+    result: {
+      schemaVersion: "2.0",
+      kind: "run-list",
+      runs: [recordedSummary(run)],
+    },
+    details: [{
+      run_id: foreignRunId.run_id,
+      status: "available",
+      result: { schemaVersion: "2.0", kind: "run", run: foreignRunId },
+    }],
+  });
+  await assertRejects(
+    () => parseModelicaRecordedViewSession(session),
+    TypeError,
+    "detail is absent from its run list",
+  );
+});
+
+Deno.test("recorded run-list rejects duplicate run identities", async () => {
+  const session = await recordedListSession({
+    result: {
+      schemaVersion: "2.0",
+      kind: "run-list",
+      runs: [recordedSummary(run), recordedSummary(run)],
+    },
+    details: [],
+  });
+  await assertRejects(
+    () => parseModelicaRecordedViewSession(session),
+    TypeError,
+    "run list contains duplicate run ids",
+  );
+});
+
+async function recordedSession(projection: unknown) {
+  const projectedRuns = projectedRunFacts(projection);
+  return {
+    schemaVersion: MODELICA_RECORDED_VIEW_SESSION_SCHEMA,
+    kind: "modelica.results",
+    basis: {
+      projectId: "project-1",
+      projectRevision: 7,
+      subjectId: "thermal-behaviour",
+      thread: { id: "thread-1", revision: 19 },
+    },
+    anchor: { kind: "modelica-run-list", id: "modelica-runs-at-r19" },
+    provenance: {
+      recordedOperation: "simulate.run-qualified-modelica-kit@1",
+      recordedArtifacts: projectedRuns.map((projectedRun, index) => ({
+        artifactId: `artifact-modelica-run-${index + 1}`,
+        runId: projectedRun.run_id,
+        runFingerprint: projectedRun.fingerprint,
+      })),
+      projectionSha256: await modelicaProjectionSha256(projection),
+    },
+    projection,
+  };
+}
+
+async function recordedListSession(
+  projection: { result: unknown; details: unknown[] },
+) {
+  return await recordedSession({ status: "available", ...projection });
+}
+
+function projectedRunFacts(projection: unknown): Array<{ run_id: string; fingerprint: string }> {
+  if (
+    typeof projection !== "object" || projection === null ||
+    (projection as { status?: unknown }).status !== "available"
+  ) return [];
+  const result = (projection as { result?: unknown }).result;
+  if (typeof result !== "object" || result === null) return [];
+  if ((result as { kind?: unknown }).kind === "run-list") {
+    const runs = (result as { runs?: unknown }).runs;
+    return Array.isArray(runs)
+      ? runs.filter(hasRunFingerprint).map((value) => ({
+        run_id: value.run_id,
+        fingerprint: value.fingerprint,
+      }))
+      : [];
+  }
+  const value = (result as { run?: unknown }).run;
+  return hasRunFingerprint(value) ? [{ run_id: value.run_id, fingerprint: value.fingerprint }] : [];
+}
+
+function hasRunFingerprint(value: unknown): value is { run_id: string; fingerprint: string } {
+  return typeof value === "object" && value !== null &&
+    typeof (value as { run_id?: unknown }).run_id === "string" &&
+    typeof (value as { fingerprint?: unknown }).fingerprint === "string";
+}
+
+function recordedSummary(value: SimulationRun) {
+  return {
+    record_schema_version: value.record_schema_version,
+    status: value.status,
+    run_id: value.run_id,
+    started_at: value.started_at,
+    completed_at: value.completed_at,
+    fingerprint: value.fingerprint,
+    model: value.model,
+    scenario: value.scenario,
+  };
+}
+
+function legacyRunEnvelopeValue() {
+  return {
+    status: run.status,
+    run_id: run.run_id,
+    started_at: run.started_at,
+    completed_at: run.completed_at,
+    fingerprint: run.fingerprint,
+    model: { id: run.model.id, version: run.model.version, sha256: run.model.source_sha256 },
+    scenario: { id: run.scenario.id, sha256: run.scenario.projection_sha256 },
+    engine: run.engine,
+    resolved_parameters: run.resolved_parameters,
+    metrics: run.metrics,
+    artifacts: run.artifacts.map(({ qualification: _qualification, ...artifact }) => artifact),
+    warnings: run.warnings,
+  };
+}
+
+function legacySummary(value: ReturnType<typeof legacyRunEnvelopeValue>) {
+  return {
+    status: value.status,
+    run_id: value.run_id,
+    started_at: value.started_at,
+    completed_at: value.completed_at,
+    fingerprint: value.fingerprint,
+    model: value.model,
+    scenario: value.scenario,
+  };
+}

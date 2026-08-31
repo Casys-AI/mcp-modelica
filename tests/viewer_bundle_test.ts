@@ -47,3 +47,23 @@ Deno.test("built viewers advertise small component catalogs without projection m
     assertEquals(bundle.includes("data-casys-projection-purpose"), false);
   }
 });
+
+Deno.test("built viewers accept recorded whole-view sessions without removing standalone drill-down", async () => {
+  for (const viewerPath of [resultsViewerPath, runListViewerPath]) {
+    const html = await Deno.readTextFile(viewerPath);
+    assert(html.includes("viewer.session.apply"));
+    assert(html.includes("io.casys.mcp-modelica.results"));
+    assert(html.includes("io.casys.mcp-modelica.recorded-results-session/1.0"));
+    assert(html.includes("simulate.run-qualified-modelica-kit@1"));
+    assert(html.includes("simulate.run-admitted-modelica@1"));
+    assert(html.includes("projectionSha256"));
+    assert(html.includes("dense JSON arrays only"));
+    assert(html.includes("Recorded detail was not supplied by the host."));
+    assert(html.includes("recovery_required"));
+    assert(html.includes("unavailable"));
+    assert(html.includes("modelica_run_get_recorded"));
+    assert(html.includes("--font-sans"));
+    assertEquals(html.includes("Modelica Results Viewer"), false);
+    assert(html.includes("linear-gradient(90deg"));
+  }
+});

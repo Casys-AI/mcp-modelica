@@ -331,6 +331,20 @@ with either artifact deliberately removed reports that viewer as skipped while k
 structured tool results usable. Neither form contains a requirement verdict; Modelica reports
 simulation execution and computed evidence only.
 
+The package also exports an App-owned `io.casys.mcp.view-app-manifest/1.0` declaration for both
+resources. Each whole-view resource names its exact run or run-list 1.0/2.0 result contracts and
+accepts `viewer.session.apply` with the strict `io.casys.mcp-modelica.recorded-results-session/1.0`
+read model. This path is for a read-only host such as a Digital Thread whiteboard: it supplies the
+exact recorded 1.0 or 2.0 result envelope and any recorded run details in the session payload. List
+drill-down then stays local and never calls `modelica_run_get`, `modelica_run_get_recorded`, or
+OpenModelica. A missing detail remains visibly `unavailable`; `pending`, `running`, `rejected`, and
+`recovery_required` likewise remain literal states rather than being smoothed into a completed
+result. The listener is installed before the MCP Apps connection starts, so an initial host session
+is buffered rather than lost. Provenance accepts only the registered
+`simulate.run-qualified-modelica-kit@1` and `simulate.run-admitted-modelica@1` operations, binds one
+recorded artifact identity to every projected run and verifies a separate SHA-256 over the raw
+canonical projection. It cannot relabel foreign evidence or derive detail from a fingerprint.
+
 The run viewer advertises small, App-owned components rather than alternate size modes:
 `modelica.run-identity`, `modelica.execution-status`, `modelica.metrics`, `modelica.parameters`,
 `modelica.provenance`, `modelica.artifacts`, and `modelica.warnings`. The run-list resource
@@ -339,11 +353,12 @@ simply the default surface that assembles the complete catalog. A compatible `@c
 host may request a different explicit subset and safe stack/row/grid layout without inspecting the
 iframe DOM.
 
-Every Modelica component now maps its domain data into the shared Preact presentation kit from
-`@casys/mcp-view/preact`: `Card`, `Badge`, `MetricGrid`, `KeyValueList`, `DataTable`, `EmptyState`,
-and `StateMessage`. Modelica owns the evidence semantics and small artifact-specific layout; it does
-not maintain a parallel card, metric, table, or state design system. When Compose selects a surface,
-the App mounts only those cards and omits its standalone masthead.
+Every Modelica component now maps its domain data into the optional shared Preact presentation kit
+from `@casys/mcp-view-components/preact/components`: `Card`, `Badge`, `MetricGrid`, `KeyValueList`,
+`DataTable`, `EmptyState`, and `StateMessage`. Modelica owns the evidence semantics and small
+artifact-specific layout; it does not maintain a parallel card, metric, table, or state design
+system. When Compose selects a surface, the App mounts only those cards and omits its standalone
+masthead.
 
 No component claims a temperature curve: the current structured result contains scalar metrics and a
 hashed CSV artifact reference, but not the samples needed to render a truthful series inside the
@@ -376,25 +391,21 @@ deno task test
 ### Results viewer build
 
 The checked-in viewers are self-contained HTML resources at
-`src/ui/dist/{results-viewer,run-list-viewer}/index.html`. Build them against the published, exact
-`@casys/mcp-view@0.7.0` release:
-
-```bash
-deno task build:ui
-```
-
-The build's temporary Deno configuration keeps the default dependency-age quarantine for all
-dependencies except the Casys-owned package name `jsr:@casys/mcp-view`; the imports remain pinned to
-`0.7.0`. The generated viewer contains no module path or network dependency.
-
-To validate unreleased local `mcp-view` work without publishing it, use the existing module override
-and still rebuild the checked-in artifact:
+`src/ui/dist/{results-viewer,run-list-viewer}/index.html`. Until the split packages are released,
+build them only against the coordinated, audited local `packages/view` and
+`packages/view-components` modules:
 
 ```bash
 MCP_VIEW_MODULE=file:///absolute/path/to/mcp-server/packages/view/mod.ts \
-MCP_VIEW_PREACT_MODULE=file:///absolute/path/to/mcp-server/packages/view/preact.ts \
+MCP_VIEW_COMPONENTS_MODULE=file:///absolute/path/to/mcp-server/packages/view-components/mod.ts \
 deno task build:ui
 ```
+
+For local file roots the build derives the sibling `view-contracts`, Preact adapter, and pure
+presentation entry points. Explicit `MCP_VIEW_CONTRACTS_MODULE`,
+`MCP_VIEW_COMPONENTS_PREACT_MODULE`, and `MCP_VIEW_PRESENTATION_MODULE` overrides remain available
+for a different layout. No unpublished package version is added to this repository. The generated
+viewer contains no module path or network dependency.
 
 The unit suite uses a deterministic fake runner only to test the MCP contract, validation, artifact
 hashing and failure semantics. It never claims that a physical simulation ran. Real OpenModelica
