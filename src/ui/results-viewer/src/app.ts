@@ -13,14 +13,18 @@ import type {
   MountedComponentSurface,
   ViewComponentRegistry,
 } from "@casys/mcp-view-components";
-import { PathBar } from "@casys/mcp-view-components/preact/components";
-import { createElement, render } from "preact";
+import { Badge, Card, PathBar, StateMessage } from "@casys/mcp-view-components/preact/components";
+import { type ComponentChildren, createElement, render } from "preact";
 import {
   type ActiveWholeView,
   createWholeViewTransitionCoordinator,
   remountActiveWholeView,
 } from "./active-whole-view.ts";
-import { MODELICA_RUN_LIST_PATH_ID, modelicaRunListPath } from "./component-catalog.ts";
+import {
+  MODELICA_RUN_LIST_PATH_ID,
+  modelicaRunListPath,
+  recordedSessionStatusPresentation,
+} from "./component-catalog.ts";
 import { createRunComponentRegistry, createRunListComponentRegistry } from "./components.tsx";
 import {
   type DisplayState,
@@ -38,7 +42,6 @@ import {
   modelicaSessionResource,
   parseModelicaRecordedViewSession,
 } from "./recorded-session.ts";
-import { escapeHtml } from "./render.ts";
 import { createLatestSurfaceMountLifecycle } from "./surface-mount-lifecycle.ts";
 import { resolveWholeViewSurfacePolicy } from "./whole-view-surface-policy.ts";
 
@@ -82,7 +85,11 @@ const statusView = defineView<ResultsViewerState>({
     if (display.kind === "loading") {
       return shell(
         "Simulation evidence",
-        `<div class="mcp-view-state" data-tone="info"><span class="spinner" aria-hidden="true"></span><strong>Receiving Modelica simulation evidence…</strong></div>`,
+        createElement(StateMessage, {
+          busy: true,
+          title: "Receiving Modelica simulation evidence…",
+          tone: "info",
+        }),
       );
     }
     if (display.kind === "empty") {
@@ -94,9 +101,10 @@ const statusView = defineView<ResultsViewerState>({
     if (display.kind === "error") {
       return shell(
         "Simulation evidence",
-        `<div class="mcp-view-state" data-tone="danger" role="alert"><strong>Unable to display this result</strong><div class="mcp-view-state-detail">${
-          escapeHtml(display.message)
-        }</div></div>`,
+        createElement(StateMessage, {
+          title: "Unable to display this result",
+          tone: "danger",
+        }, display.message),
       );
     }
     if (display.kind === "recorded-status") {
@@ -210,7 +218,7 @@ function createDetailView(
           true,
         );
         addListPathBar(ctx, node, masthead, data.runId);
-        target.innerHTML = recordedState(data.recordedStatus, data.message);
+        render(recordedState(data.recordedStatus, data.message), target);
         return node;
       }
       if ("error" in data) {
@@ -219,10 +227,13 @@ function createDetailView(
           false,
         );
         if (data.runId) addListPathBar(ctx, node, masthead, data.runId);
-        target.innerHTML =
-          `<div class="mcp-view-state" data-tone="danger" role="alert"><strong>Unable to load run detail</strong><div class="mcp-view-state-detail">${
-            escapeHtml(data.error)
-          }</div></div>`;
+        render(
+          createElement(StateMessage, {
+            title: "Unable to load run detail",
+            tone: "danger",
+          }, data.error),
+          target,
+        );
         return node;
       }
       const recorded = ctx.state.recordedSession !== undefined;
@@ -390,10 +401,18 @@ export function startResultsViewer(options: ResultsViewerOptions): void {
     const root = document.getElementById("root");
     if (root) {
       root.setAttribute("aria-busy", "false");
-      root.innerHTML =
-        `<section class="mcp-view-card modelica-shell"><div class="mcp-view-state" data-tone="danger" role="alert"><strong>Viewer unavailable</strong><div class="mcp-view-state-detail">${
-          escapeHtml(error instanceof Error ? error.message : "The results viewer could not start.")
-        }</div></div></section>`;
+      root.replaceChildren(
+        renderElement(
+          createElement(
+            Card,
+            { className: "modelica-shell" },
+            createElement(StateMessage, {
+              title: "Viewer unavailable",
+              tone: "danger",
+            }, error instanceof Error ? error.message : "The results viewer could not start."),
+          ),
+        ),
+      );
     }
     console.error(error);
   });
@@ -404,25 +423,35 @@ function componentShell(title: string, componentOnly: boolean, recorded = false)
   target: HTMLElement;
   masthead: HTMLElement;
 } {
-  const node = document.createElement("section");
-  node.className = componentOnly ? "modelica-component-only" : "mcp-view-card modelica-shell";
-  node.setAttribute("aria-label", "Modelica simulation results");
-  const masthead = document.createElement(componentOnly ? "div" : "header");
-  masthead.className = componentOnly
-    ? "mcp-view-toolbar modelica-component-actions"
-    : "mcp-view-card-header";
-  if (!componentOnly) {
-    masthead.innerHTML =
-      `<div class="mcp-view-card-heading"><p class="mcp-view-card-eyebrow">MCP / MODELICA</p><h2 class="mcp-view-card-title">${
-        escapeHtml(title)
-      }</h2></div><div class="mcp-view-card-actions"><span class="mcp-view-badge" data-tone="info">${
-        recorded ? "RECORDED" : "EVIDENCE"
-      }</span></div>`;
+  if (componentOnly) {
+    const node = document.createElement("section");
+    node.className = "modelica-component-only";
+    node.setAttribute("aria-label", "Modelica simulation results");
+    const masthead = document.createElement("div");
+    masthead.className = "mcp-view-toolbar modelica-component-actions";
+    const target = document.createElement("div");
+    target.className = "component-surface-host";
+    node.append(target);
+    return { node, target, masthead };
   }
-  const target = document.createElement("div");
-  target.className = "component-surface-host";
-  if (componentOnly) node.append(target);
-  else node.append(masthead, target);
+  const node = renderElement(
+    createElement(
+      Card,
+      {
+        actions: createElement(Badge, { tone: "info" }, recorded ? "RECORDED" : "EVIDENCE"),
+        className: "modelica-shell",
+        eyebrow: "MCP / MODELICA",
+        title,
+      },
+      createElement("div", { class: "component-surface-host" }),
+    ),
+  );
+  node.setAttribute("aria-label", "Modelica simulation results");
+  const masthead = node.querySelector(".mcp-view-card-header");
+  const target = node.querySelector(".component-surface-host");
+  if (!(masthead instanceof HTMLElement) || !(target instanceof HTMLElement)) {
+    throw new TypeError("The Modelica shell did not render a masthead and surface host.");
+  }
   return { node, target, masthead };
 }
 
@@ -449,10 +478,13 @@ function scheduleSurfaceMount<TData>(
         ...(surface ? { surface } : {}),
       }),
     (error) => {
-      target.innerHTML =
-        `<div class="mcp-view-state" data-tone="danger" role="alert"><strong>Unable to compose components</strong><div class="mcp-view-state-detail">${
-          escapeHtml(error instanceof Error ? error.message : "The component surface failed.")
-        }</div></div>`;
+      render(
+        createElement(StateMessage, {
+          title: "Unable to compose components",
+          tone: "danger",
+        }, error instanceof Error ? error.message : "The component surface failed."),
+        target,
+      );
     },
   );
 }
@@ -462,18 +494,47 @@ async function disposeMountedSurface(invalidate = true): Promise<void> {
   await surfaceMounts.dispose(invalidate);
 }
 
-function shell(title: string, content: string, badge = "EVIDENCE"): string {
-  return `<section class="mcp-view-card modelica-shell" aria-label="Modelica simulation results"><header class="mcp-view-card-header"><div class="mcp-view-card-heading"><p class="mcp-view-card-eyebrow">MCP / MODELICA</p><h2 class="mcp-view-card-title">${title}</h2></div><div class="mcp-view-card-actions"><span class="mcp-view-badge" data-tone="info">${badge}</span></div></header>${content}</section>`;
+function renderElement(vnode: ComponentChildren): HTMLElement {
+  const host = document.createElement("div");
+  render(vnode, host);
+  const element = host.firstElementChild;
+  if (!(element instanceof HTMLElement)) {
+    throw new TypeError("Expected a rendered HTML element.");
+  }
+  return element;
 }
 
-function emptyState(message: string): string {
-  return `<div class="mcp-view-state"><strong>No evidence to display</strong><div class="mcp-view-state-detail">${message}</div></div>`;
+function shell(title: string, content: ComponentChildren, badge = "EVIDENCE"): HTMLElement {
+  const node = renderElement(
+    createElement(
+      Card,
+      {
+        actions: createElement(Badge, { tone: "info" }, badge),
+        className: "modelica-shell",
+        eyebrow: "MCP / MODELICA",
+        title,
+      },
+      content,
+    ),
+  );
+  node.setAttribute("aria-label", "Modelica simulation results");
+  return node;
 }
 
-function recordedState(status: ModelicaRecordedSessionStatus, message: string): string {
-  return `<div class="modelica-recorded-state" data-status="${status}" role="status"><span class="modelica-recorded-state-dot" aria-hidden="true"></span><div><strong><code>${status}</code></strong><div class="mcp-view-state-detail">${
-    escapeHtml(message)
-  }</div></div></div>`;
+function emptyState(message: string): ComponentChildren {
+  return createElement(StateMessage, { title: "No evidence to display" }, message);
+}
+
+function recordedState(
+  status: ModelicaRecordedSessionStatus,
+  message: string,
+): ComponentChildren {
+  const presentation = recordedSessionStatusPresentation(status);
+  return createElement(StateMessage, {
+    busy: presentation.busy,
+    title: status,
+    tone: presentation.tone,
+  }, message);
 }
 
 function defaultRecordedStatusMessage(status: ModelicaRecordedSessionStatus): string {

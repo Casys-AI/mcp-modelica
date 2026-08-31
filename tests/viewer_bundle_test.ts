@@ -43,7 +43,9 @@ Deno.test("built viewers advertise small component catalogs without projection m
   assert(html.includes("modelica.provenance"));
   assert(html.includes("mcp-view-semantic-element"));
   assert(html.includes("mcp-view-artifact-row"));
+  assert(html.includes("mcp-view-inline-code"));
   assert(listHtml.includes("modelica.run-list"));
+  assert(listHtml.includes("mcp-view-semantic-list"));
   assert(listHtml.includes("modelica.run-list-summary"));
   assert(listHtml.includes("modelica.run-table"));
   assert(listHtml.includes("mcp-view-path-bar"));
@@ -70,5 +72,9 @@ Deno.test("built viewers accept recorded whole-view sessions without removing st
     assert(html.includes("--font-sans"));
     assertEquals(html.includes("Modelica Results Viewer"), false);
     assert(html.includes("linear-gradient(90deg"));
+    assertEquals(html.includes(".modelica-run-list"), false);
+    assertEquals(html.includes(".modelica-notes"), false);
+    assertEquals(html.includes(".modelica-recorded-state"), false);
+    assertEquals(html.includes(".spinner {"), false);
   }
 });

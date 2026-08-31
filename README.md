@@ -359,9 +359,12 @@ Every Modelica component now maps its domain data into the optional shared Preac
 from `@casys/mcp-view-components/preact/components`. Compact surfaces use `SemanticElement` with
 `ElementIdent`, `ElementReading`, `ElementBody`, and `ElementProvenance`. Solver execution stays a
 factual status; it is never an `ElementVerdict`, pass, or proof. Artifact ledgers use `ArtifactRow`.
-The existing All runs → run drill-down uses `PathBar`. Modelica does not use `LimitGauge`: the
-result contract has no explicit bound to display. When Compose selects a surface, the App mounts
-only those components and omits its standalone masthead.
+Persisted runs use `SemanticList`; fingerprints, hashes and run ids use `InlineCode`; notes use
+`Stack`/`Message`; loading, errors and recorded-session states use `StateMessage` with the local
+status-to-tone/busy mapping. The whole-view shell is composed from `Card` and `Badge`. The existing
+All runs → run drill-down uses `PathBar`. Modelica does not use `LimitGauge`: the result contract
+has no explicit bound to display. When Compose selects a surface, the App mounts only those
+components and omits its standalone masthead.
 
 No component claims a temperature curve: the current structured result contains scalar metrics and a
 hashed CSV artifact reference, but not the samples needed to render a truthful series inside the

@@ -122,3 +122,30 @@ export function executionStatusTone(
   if (status === "timed_out") return "warning";
   return "neutral";
 }
+
+/**
+ * Recorded-session presentation only. Titles remain the literal contract states;
+ * busy is reserved for in-flight pending/running projections.
+ */
+export function recordedSessionStatusPresentation(
+  status:
+    | "pending"
+    | "running"
+    | "rejected"
+    | "recovery_required"
+    | "unavailable"
+    | "unresolved",
+): { readonly tone: "neutral" | "info" | "warning" | "danger"; readonly busy: boolean } {
+  switch (status) {
+    case "pending":
+    case "running":
+      return { tone: "info", busy: true };
+    case "rejected":
+      return { tone: "danger", busy: false };
+    case "recovery_required":
+      return { tone: "warning", busy: false };
+    case "unavailable":
+    case "unresolved":
+      return { tone: "neutral", busy: false };
+  }
+}

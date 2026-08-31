@@ -78,98 +78,8 @@ button {
   margin: 0.65rem 0.85rem 0;
 }
 
-.modelica-run-list {
-  display: grid;
-  gap: 0;
-  min-width: 0;
-}
-
-.modelica-run-list .mcp-view-semantic-element[data-density="row"] + .mcp-view-semantic-element[data-density="row"] {
-  border-top: 0;
-}
-
-.mcp-view-key-value code,
-.mcp-view-table code,
-.mcp-view-element-provenance-value code {
-  overflow-wrap: anywhere;
-  color: var(--modelica-text);
-  font: 0.7rem/1.4 var(--modelica-mono);
-}
-
-.modelica-notes {
-  margin: 0;
-  padding-left: 1.1rem;
-  color: var(--modelica-muted);
-  text-align: left;
-}
-
 .modelica-shell > .mcp-view-state {
   min-height: 11rem;
-}
-
-.modelica-recorded-state {
-  display: flex;
-  min-height: 9rem;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  padding: 1rem;
-  border: 1px solid var(--modelica-border);
-  border-radius: 0.55rem;
-  background: var(--modelica-subtle);
-  text-align: left;
-}
-
-.modelica-recorded-state code {
-  color: var(--modelica-text);
-  font: 600 0.72rem/1.3 var(--modelica-mono);
-  letter-spacing: 0.06em;
-}
-
-.modelica-recorded-state-dot {
-  width: 0.45rem;
-  height: 0.45rem;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--modelica-muted);
-}
-
-.modelica-recorded-state[data-status="pending"] .modelica-recorded-state-dot,
-.modelica-recorded-state[data-status="running"] .modelica-recorded-state-dot {
-  background: var(--modelica-accent);
-}
-
-.modelica-recorded-state[data-status="running"] .modelica-recorded-state-dot {
-  animation: recorded-pulse 1.4s ease-in-out infinite;
-}
-
-.modelica-recorded-state[data-status="rejected"] .modelica-recorded-state-dot {
-  background: var(--modelica-danger);
-}
-
-.modelica-recorded-state[data-status="recovery_required"] .modelica-recorded-state-dot {
-  background: var(--modelica-warning);
-}
-
-.spinner {
-  width: 1.5rem;
-  height: 1.5rem;
-  border: 3px solid var(--modelica-border);
-  border-top-color: var(--modelica-accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(1turn);
-  }
-}
-
-@keyframes recorded-pulse {
-  50% {
-    opacity: 0.35;
-  }
 }
 
 @container modelica-view (max-width: 440px) {
@@ -178,12 +88,5 @@ button {
   }
   .modelica-component-only .component-surface-host {
     padding: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .spinner,
-  .modelica-recorded-state[data-status="running"] .modelica-recorded-state-dot {
-    animation: none;
   }
 }

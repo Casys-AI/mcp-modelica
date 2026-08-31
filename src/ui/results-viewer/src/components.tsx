@@ -15,10 +15,13 @@ import {
   ElementProvenance,
   ElementReading,
   EmptyState,
+  InlineCode,
   KeyValueList,
   Message,
   MetricGrid,
+  Row,
   SemanticElement,
+  SemanticList,
   Stack,
   StateMessage,
 } from "@casys/mcp-view-components/preact/components";
@@ -90,10 +93,10 @@ export function createRunComponentRegistry(): ViewComponentRegistry<
         },
         ({ data }) => (
           <Card title="Execution status">
-            <div class="mcp-view-row">
+            <Row>
               <Badge tone={executionStatusTone(data.status)}>{data.status}</Badge>
               <span class="modelica-muted">Modelica execution</span>
-            </div>
+            </Row>
           </Card>
         ),
       ),
@@ -150,17 +153,21 @@ export function createRunComponentRegistry(): ViewComponentRegistry<
                   label: "Run record contract",
                   value: data.record_schema_version,
                 },
-                { id: "fingerprint", label: "Fingerprint", value: <code>{data.fingerprint}</code> },
+                {
+                  id: "fingerprint",
+                  label: "Fingerprint",
+                  value: <InlineCode>{data.fingerprint}</InlineCode>,
+                },
                 {
                   id: "model-source-hash",
                   label: "Model source hash",
-                  value: <code>{data.model.source_sha256}</code>,
+                  value: <InlineCode>{data.model.source_sha256}</InlineCode>,
                 },
                 ...(data.scenario.source_sha256
                   ? [{
                     id: "scenario-source-hash",
                     label: "Native scenario source hash",
-                    value: <code>{data.scenario.source_sha256}</code>,
+                    value: <InlineCode>{data.scenario.source_sha256}</InlineCode>,
                   }]
                   : [{
                     id: "scenario-source-hash-unavailable",
@@ -170,13 +177,13 @@ export function createRunComponentRegistry(): ViewComponentRegistry<
                 {
                   id: "scenario-projection-hash",
                   label: "Scenario projection hash",
-                  value: <code>{data.scenario.projection_sha256}</code>,
+                  value: <InlineCode>{data.scenario.projection_sha256}</InlineCode>,
                 },
                 ...(data.parameter_schema
                   ? [{
                     id: "parameter-schema-source-hash",
                     label: "Compiler parameter-schema hash",
-                    value: <code>{data.parameter_schema.source_sha256}</code>,
+                    value: <InlineCode>{data.parameter_schema.source_sha256}</InlineCode>,
                   }]
                   : []),
                 ...(data.result_normalizer
@@ -239,9 +246,9 @@ export function createRunComponentRegistry(): ViewComponentRegistry<
                   tone="warning"
                   title={`${data.warnings.length} warning${data.warnings.length === 1 ? "" : "s"}`}
                 >
-                  <ul class="modelica-notes">
-                    {data.warnings.map((note) => <li key={note}>{note}</li>)}
-                  </ul>
+                  <Stack gap="sm">
+                    {data.warnings.map((note) => <Message key={note}>{note}</Message>)}
+                  </Stack>
                 </StateMessage>
               </Card>
             )
@@ -301,7 +308,7 @@ export function createRunListComponentRegistry(): ViewComponentRegistry<
               rowKey={(run) => run.run_id}
               onSelect={(run) => openPersistedRun(context, run)}
               columns={[
-                { id: "run", label: "Run", render: (run) => <code>{run.run_id}</code> },
+                { id: "run", label: "Run", render: (run) => <InlineCode>{run.run_id}</InlineCode> },
                 {
                   id: "execution",
                   label: "Execution",
@@ -361,21 +368,21 @@ function RunSummaryCard({ run }: { readonly run: SimulationRun }) {
                 </Message>
               )}
               {compactWarnings.entries.length > 0 && (
-                <Message tone="warning">
-                  {`${run.warnings.length} warning${run.warnings.length === 1 ? "" : "s"}`}
-                  <ul class="modelica-notes">
-                    {compactWarnings.entries.map((note, index) => (
-                      <li key={`${index}:${note}`}>{note}</li>
-                    ))}
-                  </ul>
+                <Stack gap="sm">
+                  <Message tone="warning">
+                    {`${run.warnings.length} warning${run.warnings.length === 1 ? "" : "s"}`}
+                  </Message>
+                  {compactWarnings.entries.map((note, index) => (
+                    <Message key={`${index}:${note}`}>{note}</Message>
+                  ))}
                   {compactWarnings.omitted > 0 && (
-                    <span>
+                    <Message>
                       {`${compactWarnings.omitted} additional warning${
                         compactWarnings.omitted === 1 ? "" : "s"
                       } available in the detailed warnings component.`}
-                    </span>
+                    </Message>
                   )}
-                </Message>
+                </Stack>
               )}
             </Stack>
           </ElementBody>
@@ -384,7 +391,7 @@ function RunSummaryCard({ run }: { readonly run: SimulationRun }) {
       provenance={
         <ElementProvenance
           label="Fingerprint"
-          value={<code>{run.fingerprint}</code>}
+          value={<InlineCode>{run.fingerprint}</InlineCode>}
         />
       }
     />
@@ -399,9 +406,8 @@ function PersistedRunList({
   readonly context: ViewerContext;
 }) {
   return (
-    <div
-      aria-label={`${runs.length} persisted Modelica run${runs.length === 1 ? "" : "s"}`}
-      class="modelica-run-list"
+    <SemanticList
+      label={`${runs.length} persisted Modelica run${runs.length === 1 ? "" : "s"}`}
     >
       {runs.map((run) => (
         <SemanticElement
@@ -425,7 +431,7 @@ function PersistedRunList({
           onActivate={() => openPersistedRun(context, run)}
         />
       ))}
-    </div>
+    </SemanticList>
   );
 }
 

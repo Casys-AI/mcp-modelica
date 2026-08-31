@@ -10,6 +10,10 @@ All notable changes to `@casys/mcp-modelica` are documented here.
   shared View v2 `SemanticElement` kit. Detailed identity, status, metrics, parameters, provenance,
   artifact, warning, and table components remain advertised for host composition. Solver execution
   stays a factual status, not a pass or proof verdict.
+- Remaining generic presentation now uses the shared kit: `Row`, `SemanticList`, `InlineCode`,
+  `Stack`/`Message` notes, and `StateMessage` for loading, errors, and recorded-session states.
+  Recorded statuses stay literal; pending/running are `busy`. The whole-view shell is composed from
+  `Card`, `Badge`, and `StateMessage` instead of reconstructed kit markup.
 
 ## [0.6.1] - 2026-08-29
 

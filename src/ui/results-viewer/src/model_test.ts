@@ -14,6 +14,7 @@ import {
   MODELICA_RUN_LIST_PATH_ID,
   modelicaRunListPath,
   modelicaRunReference,
+  recordedSessionStatusPresentation,
 } from "./component-catalog.ts";
 import { errorMessage, parseResultsEnvelope, type SimulationRun } from "./model.ts";
 import {
@@ -205,6 +206,18 @@ Deno.test("solver execution status is not a pass or proof verdict", () => {
   assertEquals(executionStatusTone("failed"), "danger");
 });
 
+Deno.test("recorded session states keep their literal labels and mapped StateMessage tone/busy", () => {
+  assertEquals(recordedSessionStatusPresentation("pending"), { tone: "info", busy: true });
+  assertEquals(recordedSessionStatusPresentation("running"), { tone: "info", busy: true });
+  assertEquals(recordedSessionStatusPresentation("rejected"), { tone: "danger", busy: false });
+  assertEquals(
+    recordedSessionStatusPresentation("recovery_required"),
+    { tone: "warning", busy: false },
+  );
+  assertEquals(recordedSessionStatusPresentation("unavailable"), { tone: "neutral", busy: false });
+  assertEquals(recordedSessionStatusPresentation("unresolved"), { tone: "neutral", busy: false });
+});
+
 Deno.test("run semantic reference carries exact identity and fingerprint", () => {
   assertEquals(modelicaRunReference(run), {
     domain: "simulation",
@@ -238,16 +251,31 @@ Deno.test("component sources keep detailed catalog, compact defaults, and no syn
   assertStringIncludes(components, "ElementBody");
   assertStringIncludes(components, "ElementProvenance");
   assertStringIncludes(components, "ArtifactRow");
+  assertStringIncludes(components, "<Row>");
+  assertStringIncludes(components, "SemanticList");
+  assertStringIncludes(components, "InlineCode");
+  assertStringIncludes(components, "<Message");
   assertStringIncludes(components, "defaultSurface: MODELICA_RUN_DEFAULT_SURFACE");
   assertStringIncludes(components, "defaultSurface: MODELICA_RUN_LIST_DEFAULT_SURFACE");
   assertEquals(components.includes("ElementVerdict"), false);
   assertEquals(components.includes("LimitGauge"), false);
   assertEquals(components.includes("curves"), false);
+  assertEquals(components.includes('class="mcp-view-row"'), false);
+  assertEquals(components.includes("modelica-run-list"), false);
+  assertEquals(components.includes("modelica-notes"), false);
+  assertEquals(components.includes("<code>"), false);
   assertEquals(/\bproof\b|\bpass\b/.test(components), false);
   assertStringIncludes(app, "PathBar");
   assertStringIncludes(app, "modelicaRunListPath");
   assertStringIncludes(app, "if (data.runId) addListPathBar(ctx, node, masthead, data.runId)");
+  assertStringIncludes(app, "Card");
+  assertStringIncludes(app, "StateMessage");
+  assertStringIncludes(app, "recordedSessionStatusPresentation");
   assertEquals(app.includes("‹ All runs"), false);
+  assertEquals(app.includes("modelica-recorded-state"), false);
+  assertEquals(app.includes('class="spinner"'), false);
+  assertEquals(app.includes('class="mcp-view-card'), false);
+  assertEquals(app.includes('class="mcp-view-state'), false);
 });
 
 Deno.test("results viewer formatting is truthful and HTML-safe", () => {
@@ -271,6 +299,10 @@ Deno.test("component styles contain no projection-mode selectors", async () => {
   assertEquals(styles.includes("Inter"), false);
   assertEquals(styles.includes("data-casys-projection"), false);
   assertEquals(styles.includes("glance"), false);
+  assertEquals(styles.includes(".modelica-run-list"), false);
+  assertEquals(styles.includes(".modelica-notes"), false);
+  assertEquals(styles.includes(".modelica-recorded-state"), false);
+  assertEquals(styles.includes(".spinner"), false);
 });
 
 Deno.test("Modelica publishes whole-view recorded-session declarations", () => {
