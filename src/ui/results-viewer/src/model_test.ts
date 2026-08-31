@@ -1,6 +1,9 @@
 import { assertEquals, assertRejects, assertStringIncludes, assertThrows } from "@std/assert";
 import { PACKAGE_VERSION } from "../../../release-identity.ts";
 import {
+  MODELICA_RECORDED_ADMITTED_EXECUTION_SESSION_SCHEMA,
+} from "./admitted-recorded-session.ts";
+import {
   compactRunMetricEntries,
   compactRunWarnings,
   executionStatusTone,
@@ -325,7 +328,10 @@ Deno.test("Modelica publishes whole-view recorded-session declarations", () => {
         uri: "ui://mcp-modelica/results-viewer",
         ownership: "whole-view",
         acceptedActions: [VIEWER_SESSION_APPLY_ACTION],
-        sessionSchemas: [MODELICA_RECORDED_VIEW_SESSION_SCHEMA],
+        sessionSchemas: [
+          MODELICA_RECORDED_VIEW_SESSION_SCHEMA,
+          MODELICA_RECORDED_ADMITTED_EXECUTION_SESSION_SCHEMA,
+        ],
       },
       {
         uri: "ui://mcp-modelica/run-list-viewer",
@@ -338,6 +344,7 @@ Deno.test("Modelica publishes whole-view recorded-session declarations", () => {
   assertEquals(MODELICA_VIEW_APP_MANIFEST.resources[0].resultSchemas, [
     MODELICA_RESULT_SCHEMA_IDS.legacyRun,
     MODELICA_RESULT_SCHEMA_IDS.recordedRun,
+    MODELICA_RESULT_SCHEMA_IDS.admittedExecutionCapture,
   ]);
   assertEquals(MODELICA_VIEW_APP_MANIFEST.resources[1].resultSchemas, [
     MODELICA_RESULT_SCHEMA_IDS.legacyRunList,

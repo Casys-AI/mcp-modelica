@@ -1,6 +1,7 @@
 import { assert, assertEquals } from "@std/assert";
 import { PACKAGE_VERSION } from "../src/release-identity.ts";
 import {
+  MODELICA_RECORDED_ADMITTED_EXECUTION_SESSION_SCHEMA,
   MODELICA_RECORDED_VIEW_SESSION_SCHEMA,
   MODELICA_RESULT_SCHEMA_IDS,
   MODELICA_RESULTS_VIEWER_URI,
@@ -27,11 +28,18 @@ Deno.test("public Modelica App manifest names the exact registered resources", (
   for (const resource of MODELICA_VIEW_APP_MANIFEST.resources) {
     assertEquals(resource.ownership, "whole-view");
     assertEquals(resource.acceptedActions, [VIEWER_SESSION_APPLY_ACTION]);
-    assertEquals(resource.sessionSchemas, [MODELICA_RECORDED_VIEW_SESSION_SCHEMA]);
   }
+  assertEquals(MODELICA_VIEW_APP_MANIFEST.resources[0].sessionSchemas, [
+    MODELICA_RECORDED_VIEW_SESSION_SCHEMA,
+    MODELICA_RECORDED_ADMITTED_EXECUTION_SESSION_SCHEMA,
+  ]);
+  assertEquals(MODELICA_VIEW_APP_MANIFEST.resources[1].sessionSchemas, [
+    MODELICA_RECORDED_VIEW_SESSION_SCHEMA,
+  ]);
   assertEquals(MODELICA_VIEW_APP_MANIFEST.resources[0].resultSchemas, [
     MODELICA_RESULT_SCHEMA_IDS.legacyRun,
     MODELICA_RESULT_SCHEMA_IDS.recordedRun,
+    MODELICA_RESULT_SCHEMA_IDS.admittedExecutionCapture,
   ]);
   assertEquals(MODELICA_VIEW_APP_MANIFEST.resources[1].resultSchemas, [
     MODELICA_RESULT_SCHEMA_IDS.legacyRunList,

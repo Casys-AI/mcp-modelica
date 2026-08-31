@@ -35,6 +35,14 @@ export {
   MODELICA_RUN_LIST_VIEWER_URI,
 } from "./src/tools/results.ts";
 export {
+  isModelicaRecordedAdmittedSessionInput,
+  MODELICA_ADMITTED_EXECUTION_CAPTURE_SCHEMA,
+  MODELICA_RECORDED_ADMITTED_EXECUTION_SESSION_SCHEMA,
+  modelicaAdmittedCanonicalSha256,
+  parseModelicaAdmittedExecutionCapture,
+  parseModelicaRecordedAdmittedExecutionSession,
+} from "./src/ui/results-viewer/src/admitted-recorded-session.ts";
+export {
   isModelicaRecordedViewSessionInputForResource,
   loadModelicaRunDetail,
   MODELICA_RECORDED_OPERATIONS,
@@ -101,6 +109,15 @@ export type {
   ModelicaRunListResultEnvelope,
   ModelicaRunResultEnvelope,
 } from "./src/tools/results.ts";
+export type {
+  ModelicaAdmittedExecutionCaptureView,
+  ModelicaAdmittedExecutionViewData,
+  ModelicaAdmittedResultAnchor,
+  ModelicaRecordedAdmittedExecutionSession,
+  ModelicaRecordedAdmittedProvenance,
+  ModelicaRecordedAdmittedSessionInput,
+  ModelicaRecordedArtifactRef,
+} from "./src/ui/results-viewer/src/admitted-recorded-session.ts";
 export type {
   ModelicaRecordedOperation,
   ModelicaRecordedRunDetailProjection,

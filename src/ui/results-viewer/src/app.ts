@@ -20,6 +20,17 @@ import {
   createWholeViewTransitionCoordinator,
   remountActiveWholeView,
 } from "./active-whole-view.ts";
+import { createAdmittedRunComponentRegistry } from "./admitted-components.tsx";
+import {
+  isModelicaRecordedAdmittedSessionInput,
+  MODELICA_ADMITTED_EXECUTION_CAPTURE_SCHEMA,
+  MODELICA_RECORDED_ADMITTED_EXECUTION_SESSION_SCHEMA,
+  type ModelicaAdmittedExecutionViewData,
+  type ModelicaRecordedAdmittedExecutionSession,
+  type ModelicaRecordedAdmittedSessionInput,
+  parseModelicaAdmittedExecutionCapture,
+  parseModelicaRecordedAdmittedExecutionSession,
+} from "./admitted-recorded-session.ts";
 import {
   MODELICA_RUN_LIST_PATH_ID,
   modelicaRunListPath,
@@ -60,11 +71,16 @@ type DetailArgs =
 export interface ResultsViewerState {
   display: DisplayState;
   recordedSession?: ModelicaRecordedViewSession;
+  admittedData?: ModelicaAdmittedExecutionViewData;
   activeWholeView?: ActiveWholeView<
     Extract<ResultsEnvelope, { kind: "run-list" }>,
     DetailData
   >;
 }
+
+type ModelicaViewerSessionInput =
+  | ModelicaRecordedViewSessionInput
+  | ModelicaRecordedAdmittedSessionInput;
 
 export interface ResultsViewerOptions {
   /** The resource chooses its truthful standalone default component surface. */
@@ -131,6 +147,7 @@ function createListView(
       if (envelope.kind !== "run-list") {
         throw new TypeError("Expected a Modelica run-list envelope.");
       }
+      ctx.state.admittedData = undefined;
       ctx.state.activeWholeView = { name: "list", envelope };
       return envelope.runs;
     },
@@ -167,6 +184,7 @@ function createDetailView(
 ) {
   return defineView<ResultsViewerState, DetailArgs, DetailData>({
     async onEnter(ctx, args) {
+      ctx.state.admittedData = undefined;
       const remember = (data: DetailData): DetailData => {
         ctx.state.activeWholeView = { name: "detail", data };
         return data;
@@ -263,6 +281,41 @@ function createDetailView(
   });
 }
 
+function createAdmittedView(
+  registry: ViewComponentRegistry<ModelicaAdmittedExecutionViewData, ViewerContext>,
+) {
+  return defineView<
+    ResultsViewerState,
+    ModelicaAdmittedExecutionViewData,
+    ModelicaAdmittedExecutionViewData
+  >({
+    onEnter(ctx, data) {
+      ctx.state.activeWholeView = undefined;
+      ctx.state.admittedData = data;
+      return data;
+    },
+    async onLeave() {
+      await disposeMountedSurface();
+    },
+    render(ctx, data) {
+      const recorded = data.recordedProvenance !== undefined;
+      const presentation = resolveWholeViewSurfacePolicy({
+        recorded,
+        hostSelectedSurface: false,
+        defaultSurface: registry.defaultSurface,
+        preferDefaultSurface: true,
+      });
+      const { node, target } = componentShell(
+        "Admitted Modelica execution",
+        presentation.componentOnly,
+        recorded,
+      );
+      scheduleSurfaceMount(target, registry, data, ctx, presentation.surface);
+      return node;
+    },
+  });
+}
+
 export async function bootResultsViewer(options: ResultsViewerOptions): Promise<void> {
   const root = document.getElementById("root");
   if (!root) throw new Error("The results viewer root is missing.");
@@ -270,11 +323,13 @@ export async function bootResultsViewer(options: ResultsViewerOptions): Promise<
   installMcpViewTheme();
   const runRegistry = createRunComponentRegistry();
   const listRegistry = createRunListComponentRegistry();
+  const admittedRegistry = createAdmittedRunComponentRegistry();
   const componentCapabilities = options.resource === "run"
     ? componentCatalogCapabilities(runRegistry)
     : componentCatalogCapabilities(listRegistry);
   const listView = createListView(listRegistry);
   const detailView = createDetailView(runRegistry);
+  const admittedView = createAdmittedView(admittedRegistry);
   const wholeViewTransitions = createWholeViewTransitionCoordinator();
 
   let removeHostContextListener = () => {};
@@ -289,6 +344,7 @@ export async function bootResultsViewer(options: ResultsViewerOptions): Promise<
         );
       }
       app.ctx.state.recordedSession = session;
+      app.ctx.state.admittedData = undefined;
       viewerRoot.setAttribute("aria-busy", "false");
       if (session.projection.status !== "available") {
         app.ctx.state.display = {
@@ -308,12 +364,38 @@ export async function bootResultsViewer(options: ResultsViewerOptions): Promise<
       await app.navigate(envelope.kind === "run-list" ? "list" : "detail", envelope);
     });
   };
+  const applyRecordedAdmittedSession = async (
+    session: ModelicaRecordedAdmittedExecutionSession,
+    app: AppHandle<ResultsViewerState>,
+  ): Promise<void> => {
+    await wholeViewTransitions.replace(async () => {
+      if (options.resource !== "run") {
+        throw new TypeError("The Modelica run-list resource does not accept admitted captures.");
+      }
+      app.ctx.state.recordedSession = undefined;
+      viewerRoot.setAttribute("aria-busy", "false");
+      if (session.projection.status !== "available") {
+        app.ctx.state.admittedData = undefined;
+        app.ctx.state.display = {
+          kind: "recorded-status",
+          status: session.projection.status,
+          message: "reason" in session.projection
+            ? session.projection.reason
+            : defaultRecordedStatusMessage(session.projection.status),
+        };
+        await app.navigate("status");
+        return;
+      }
+      await app.navigate("admitted", session.projection.data);
+    });
+  };
   const reportRecordedSessionError = async (
     error: unknown,
     app: AppHandle<ResultsViewerState>,
   ): Promise<void> => {
     await wholeViewTransitions.replace(async () => {
       app.ctx.state.recordedSession = undefined;
+      app.ctx.state.admittedData = undefined;
       app.ctx.state.display = {
         kind: "error",
         message: error instanceof Error
@@ -325,21 +407,29 @@ export async function bootResultsViewer(options: ResultsViewerOptions): Promise<
     });
   };
 
-  const app = await createMcpApp<ResultsViewerState, ModelicaRecordedViewSessionInput>({
+  const app = await createMcpApp<ResultsViewerState, ModelicaViewerSessionInput>({
     info: MODELICA_VIEW_APP_INFO,
     root,
-    views: { status: statusView, list: listView, detail: detailView },
+    views: { status: statusView, list: listView, detail: detailView, admitted: admittedView },
     initialView: "status",
     initialState: { display: { kind: "loading" } },
     capabilities: { experimental: componentCapabilities },
     viewerSession: {
       // Reject foreign shapes and resources synchronously. WebCrypto verifies the fingerprint in
       // onSession before any recorded state or navigation is applied.
-      validate: (value): value is ModelicaRecordedViewSessionInput =>
-        isModelicaRecordedViewSessionInputForResource(value, options.resource),
+      validate: (value): value is ModelicaViewerSessionInput =>
+        isModelicaRecordedViewSessionInputForResource(value, options.resource) ||
+        (options.resource === "run" && isModelicaRecordedAdmittedSessionInput(value)),
       async onSession(value, _payload, app) {
         try {
-          await applyRecordedSession(await parseModelicaRecordedViewSession(value), app);
+          if (value.schemaVersion === MODELICA_RECORDED_ADMITTED_EXECUTION_SESSION_SCHEMA) {
+            await applyRecordedAdmittedSession(
+              await parseModelicaRecordedAdmittedExecutionSession(value),
+              app,
+            );
+          } else {
+            await applyRecordedSession(await parseModelicaRecordedViewSession(value), app);
+          }
         } catch (error) {
           await reportRecordedSessionError(error, app);
         }
@@ -349,6 +439,7 @@ export async function bootResultsViewer(options: ResultsViewerOptions): Promise<
       await wholeViewTransitions.replace(async () => {
         root.setAttribute("aria-busy", "true");
         app.ctx.state.recordedSession = undefined;
+        app.ctx.state.admittedData = undefined;
         app.ctx.state.display = { kind: "loading" };
         await app.navigate("status");
       });
@@ -357,12 +448,23 @@ export async function bootResultsViewer(options: ResultsViewerOptions): Promise<
       await wholeViewTransitions.replace(async () => {
         root.setAttribute("aria-busy", "false");
         app.ctx.state.recordedSession = undefined;
+        app.ctx.state.admittedData = undefined;
         if (result.isError) {
           app.ctx.state.display = { kind: "error", message: errorMessage(result) };
           await app.navigate("status");
           return;
         }
         try {
+          if (
+            options.resource === "run" &&
+            isSchema(result.structuredContent, MODELICA_ADMITTED_EXECUTION_CAPTURE_SCHEMA)
+          ) {
+            await app.navigate(
+              "admitted",
+              await parseModelicaAdmittedExecutionCapture(result.structuredContent),
+            );
+            return;
+          }
           const envelope = parseResultsEnvelope(result.structuredContent);
           app.ctx.state.display = envelope.kind === "run-list" && envelope.runs.length === 0
             ? { kind: "empty" }
@@ -387,6 +489,10 @@ export async function bootResultsViewer(options: ResultsViewerOptions): Promise<
   });
   const remountSelectedSurface = () => {
     void wholeViewTransitions.remount(async () => {
+      if (app.ctx.state.admittedData) {
+        await app.navigate("admitted", app.ctx.state.admittedData);
+        return;
+      }
       await remountActiveWholeView(app.ctx.state.activeWholeView, {
         list: (envelope) => app.navigate("list", envelope),
         detail: (data) => app.navigate("detail", { resolvedDetail: data }),
@@ -555,6 +661,14 @@ function defaultRecordedStatusMessage(status: ModelicaRecordedSessionStatus): st
     case "unavailable":
       return "Recorded simulation detail is unavailable.";
   }
+}
+
+function isSchema(
+  value: unknown,
+  schemaVersion: string,
+): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) &&
+    (value as Record<string, unknown>).schemaVersion === schemaVersion;
 }
 
 let pathBarRoot: HTMLElement | undefined;

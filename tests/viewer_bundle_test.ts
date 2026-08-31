@@ -79,3 +79,23 @@ Deno.test("built viewers accept recorded whole-view sessions without removing st
     assertEquals(html.includes(".spinner {"), false);
   }
 });
+
+Deno.test("built run viewer contains the exact admitted-capture mono-object adapter", async () => {
+  const html = await Deno.readTextFile(resultsViewerPath);
+  for (
+    const literal of [
+      "io.casys.mcp-modelica.recorded-admitted-execution-session/1.0",
+      "modelica-admitted-execution-capture/2.0",
+      "modelica.admitted-run-summary",
+      "ready-for-review",
+      "ready-for-execution-review",
+      "atomic-batch-published",
+      "staged-reread-atomic-commit",
+      "modelica-admitted-result-",
+    ]
+  ) {
+    assert(html.includes(literal), `run viewer must contain ${literal}`);
+  }
+  assert(html.includes("Admitted Modelica execution"));
+  assert(html.includes("Recorded admitted Modelica anchor is not its exact result artifact."));
+});

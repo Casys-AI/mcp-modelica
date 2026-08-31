@@ -1,6 +1,10 @@
 import { parseResultsEnvelope, type ResultsEnvelope } from "./model.ts";
 import { PACKAGE_VERSION } from "../../../release-identity.ts";
 import { isDenseJsonArray } from "./strict-json.ts";
+import {
+  MODELICA_ADMITTED_EXECUTION_CAPTURE_SCHEMA,
+  MODELICA_RECORDED_ADMITTED_EXECUTION_SESSION_SCHEMA,
+} from "./admitted-recorded-session.ts";
 
 export const VIEW_APP_MANIFEST_SCHEMA = "io.casys.mcp.view-app-manifest/1.0" as const;
 export const VIEWER_SESSION_APPLY_ACTION = "viewer.session.apply" as const;
@@ -10,10 +14,11 @@ export const MODELICA_RECORDED_VIEW_SESSION_SCHEMA =
 export const MODELICA_RESULTS_VIEWER_URI = "ui://mcp-modelica/results-viewer" as const;
 export const MODELICA_RUN_LIST_VIEWER_URI = "ui://mcp-modelica/run-list-viewer" as const;
 
-/** Stable identities for the four exact structured-result contracts rendered by this App. */
+/** Stable identities for the exact structured-result contracts rendered by this App. */
 export const MODELICA_RESULT_SCHEMA_IDS = {
   legacyRun: "io.casys.mcp-modelica.run-result/1.0",
   recordedRun: "io.casys.mcp-modelica.run-result/2.0",
+  admittedExecutionCapture: MODELICA_ADMITTED_EXECUTION_CAPTURE_SCHEMA,
   legacyRunList: "io.casys.mcp-modelica.run-list-result/1.0",
   recordedRunList: "io.casys.mcp-modelica.run-list-result/2.0",
 } as const;
@@ -39,9 +44,13 @@ export const MODELICA_VIEW_APP_MANIFEST = {
       resultSchemas: [
         MODELICA_RESULT_SCHEMA_IDS.legacyRun,
         MODELICA_RESULT_SCHEMA_IDS.recordedRun,
+        MODELICA_RESULT_SCHEMA_IDS.admittedExecutionCapture,
       ],
       acceptedActions: [VIEWER_SESSION_APPLY_ACTION],
-      sessionSchemas: [MODELICA_RECORDED_VIEW_SESSION_SCHEMA],
+      sessionSchemas: [
+        MODELICA_RECORDED_VIEW_SESSION_SCHEMA,
+        MODELICA_RECORDED_ADMITTED_EXECUTION_SESSION_SCHEMA,
+      ],
     },
     {
       uri: MODELICA_RUN_LIST_VIEWER_URI,

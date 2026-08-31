@@ -1,5 +1,6 @@
 /** Advertised Modelica component keys and App-owned default surfaces. */
 export const MODELICA_COMPONENTS = {
+  admittedRunSummary: "modelica.admitted-run-summary",
   runSummary: "modelica.run-summary",
   runIdentity: "modelica.run-identity",
   executionStatus: "modelica.execution-status",
@@ -11,6 +12,14 @@ export const MODELICA_COMPONENTS = {
   runList: "modelica.run-list",
   runListSummary: "modelica.run-list-summary",
   runTable: "modelica.run-table",
+} as const;
+
+/** Exact admitted DT capture surface: one bounded semantic execution object. */
+export const MODELICA_ADMITTED_RUN_DEFAULT_SURFACE = {
+  layout: { type: "stack", gap: "sm" },
+  components: [
+    { id: "admitted-run", component: MODELICA_COMPONENTS.admittedRunSummary },
+  ],
 } as const;
 
 export const MODELICA_RUN_CATALOG = [

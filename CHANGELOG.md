@@ -6,9 +6,13 @@ All notable changes to `@casys/mcp-modelica` are documented here.
 
 ### Added
 
-- A provider-owned serialized View App manifest, published through the
-  `./view-app-manifest` package export, declares both exact Modelica viewer resources and their
-  recorded-session compatibility without embedding a session, anchor, or provider authority.
+- A provider-owned serialized View App manifest, published through the `./view-app-manifest` package
+  export, declares both exact Modelica viewer resources and their recorded-session compatibility
+  without embedding a session, anchor, or provider authority.
+- The run viewer accepts the exact `io.casys.mcp-modelica.recorded-admitted-execution-session/1.0`
+  read model and renders a validated Digital Thread `modelica-admitted-execution-capture/2.0`
+  directly. The frozen MCS01 nested admission profile remains literal; no provider
+  `ResultsEnvelope`, success verdict, or unit is synthesized.
 
 ### Changed
 
@@ -20,6 +24,9 @@ All notable changes to `@casys/mcp-modelica` are documented here.
   `Stack`/`Message` notes, and `StateMessage` for loading, errors, and recorded-session states.
   Recorded statuses stay literal; pending/running are `busy`. The whole-view shell is composed from
   `Card`, `Badge`, and `StateMessage` instead of reconstructed kit markup.
+- Recorded admitted execution sessions bind the visible solver-result anchor to the exact admission,
+  capture, evidence, and result artifacts, then verify the capture, execution, receipt, publication,
+  and output fingerprints before applying viewer state.
 
 ## [0.6.1] - 2026-08-29
 

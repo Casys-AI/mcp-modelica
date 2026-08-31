@@ -1,0 +1,267 @@
+{
+  "admission": {
+    "admissionArtifact": {
+      "fingerprint": {
+        "algorithm": "sha256",
+        "digest": "f6ecea5b5a341e7a41fd1bdf36068e9413f3a2fd12df2133baafef69b9374336"
+      },
+      "id": "technical-compilation-admission-f6ecea5b5a341e7a41fd1bdf36068e9413f3a2fd12df2133baafef69b9374336",
+      "schemaVersion": "technical-compilation-admission-capture/2.0"
+    },
+    "compilation": {
+      "document": {
+        "fingerprint": {
+          "algorithm": "sha256",
+          "digest": "254d7f9f456d46e0b7fdcfb6ad3f04ff71bb74dbdff64ea8a7df8829a8554c79"
+        },
+        "schemaVersion": "technical-compilation/1.0",
+        "status": "ready-for-review"
+      },
+      "profile": {
+        "fingerprint": {
+          "algorithm": "sha256",
+          "digest": "2dbdc7d10834c04e1471cb220ba28c2d271c21a6cbeb88bb4d5e6f2df05bb63d"
+        },
+        "id": "modelica-closed-subset-v2",
+        "version": "2.0.0"
+      },
+      "projection": {
+        "fingerprint": {
+          "algorithm": "sha256",
+          "digest": "b7f0f08ad43012aff39dd45fff0848a6a6ee4122247a526ff8a9b4e15df5b3ee"
+        },
+        "status": "ready-for-review",
+        "target": "modelica-source-qualification"
+      },
+      "source": {
+        "analysisFingerprint": {
+          "algorithm": "sha256",
+          "digest": "539f050e6dc416813fa34fdf61ed0407685862604c73095b4b0e721e39b84c2a"
+        },
+        "captureFingerprint": {
+          "algorithm": "sha256",
+          "digest": "e58000121d3f671ea4e2514146bb82ff5827d4cf4dd0f60d43e43a68a1591ea8"
+        },
+        "id": "mcs01.slider-motion",
+        "sourceFingerprint": {
+          "algorithm": "sha256",
+          "digest": "e0f626508ca74c165eebc539de560cd72fd1c3b4a9bcb5088e9ab40adf9031cb"
+        }
+      }
+    },
+    "execution": {
+      "isolationPolicy": {
+        "fingerprint": {
+          "algorithm": "sha256",
+          "digest": "f1ad74b2b32f67214dbcd02fd866fad0a781b881c7c5e05ae85767119f8ae214"
+        },
+        "id": "modelica-admitted-microsandbox-deny-all-v1",
+        "version": "1.0.0"
+      },
+      "minimumDestructionAssurance": "proven",
+      "outputValidator": {
+        "id": "modelica-closed-subset-v2-result-normalizer",
+        "version": "2.0.0"
+      },
+      "outputs": [
+        {
+          "basename": "evidence.json",
+          "format": "modelica-isolated-evidence-v2",
+          "mediaType": "application/json",
+          "role": "evidence"
+        },
+        {
+          "basename": "result.csv",
+          "format": "openmodelica-result-csv",
+          "mediaType": "text/csv",
+          "role": "result"
+        }
+      ],
+      "profile": {
+        "fingerprint": {
+          "algorithm": "sha256",
+          "digest": "c14ba9257e623a434e8d0e934c93ba3ec01d9870552f2d2f7621528715020269"
+        },
+        "id": "modelica-closed-subset-v2",
+        "version": "2.0.0"
+      },
+      "runtime": {
+        "imageDigest": {
+          "algorithm": "sha256",
+          "digest": "d25f220287cd8d1713e9e7d773afb8bb867fc5404a112e5e50ffa2e862fd6fdf"
+        },
+        "isolationClass": "microsandbox-local-microvm-v1",
+        "limitAssurance": {
+          "maxCpuTimeMs": "unattested",
+          "maxMemoryBytes": "backend-attested",
+          "maxOutputFileBytes": "broker-observed-cap",
+          "maxOutputTotalBytes": "broker-observed-cap",
+          "maxProcesses": "unattested",
+          "maxStderrBytes": "broker-observed-cap",
+          "maxStdoutBytes": "broker-observed-cap",
+          "maxWallTimeMs": "backend-attested"
+        },
+        "limits": {
+          "maxCpuTimeMs": 120000,
+          "maxMemoryBytes": 3221225472,
+          "maxOutputFileBytes": 16777216,
+          "maxOutputTotalBytes": 17825792,
+          "maxProcesses": 64,
+          "maxStderrBytes": 1048576,
+          "maxStdoutBytes": 1048576,
+          "maxWallTimeMs": 120000
+        }
+      },
+      "runtimeBackend": {
+        "id": "microsandbox-local",
+        "imageDigest": {
+          "algorithm": "sha256",
+          "digest": "d25f220287cd8d1713e9e7d773afb8bb867fc5404a112e5e50ffa2e862fd6fdf"
+        },
+        "imageReference": "casys/modelica-microsandbox-worker@sha256:d25f220287cd8d1713e9e7d773afb8bb867fc5404a112e5e50ffa2e862fd6fdf",
+        "lifecycle": "attached",
+        "network": "none",
+        "version": "0.6.8"
+      }
+    },
+    "schemaVersion": "modelica-admitted-run-admission/3.0",
+    "status": "ready-for-execution-review"
+  },
+  "agentRunId": "run:queue-mcs01-run-slider-motion-r91",
+  "executionRunId": "admitted-modelica-a4bc00f6d99386da710ba342ff55ee19f023576d4662ceba930e254f049f2287",
+  "metrics": [
+    {
+      "outputName": "carriagePosition",
+      "statistic": "final",
+      "unit": "mm",
+      "value": 399.9999999999999
+    },
+    {
+      "outputName": "carriagePosition",
+      "statistic": "max_abs",
+      "unit": "mm",
+      "value": 399.9999999999999
+    }
+  ],
+  "modelName": "SliderMotion",
+  "operation": { "id": "simulate.run-admitted-modelica", "version": "1" },
+  "parameters": [
+    { "name": "targetTravel", "unit": "mm", "value": 400 },
+    { "name": "travelDuration", "unit": "s", "value": 20 }
+  ],
+  "projectId": "motorized-camera-slider-mcs01",
+  "receipt": {
+    "destruction": {
+      "proofFingerprint": {
+        "algorithm": "sha256",
+        "digest": "b06a9594971ac899b240178e15b9aca2fc8a158d9dce4cc28fb9f0a5b48f92cd"
+      },
+      "runId": "admitted-modelica-a4bc00f6d99386da710ba342ff55ee19f023576d4662ceba930e254f049f2287",
+      "status": "proven"
+    },
+    "fingerprint": {
+      "algorithm": "sha256",
+      "digest": "1040b5d7d492b73a4b4809dec75925c1acee87a584dcc0776cb3cd914b9fbdf4"
+    },
+    "logs": {
+      "stderr": {
+        "byteCount": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "truncated": false
+      },
+      "stdout": {
+        "byteCount": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "truncated": false
+      }
+    },
+    "outputs": [
+      {
+        "basename": "evidence.json",
+        "byteCount": 1031,
+        "casUri": "casys://isolated-output/sha256/5a66a167ee86f9a4f8faec4d5b55d07658ca5c82f38de7af9eba27b5a63b6cd6",
+        "format": "modelica-isolated-evidence-v2",
+        "mediaType": "application/json",
+        "persistence": "staged-reread-atomic-commit",
+        "role": "evidence",
+        "sha256": "5a66a167ee86f9a4f8faec4d5b55d07658ca5c82f38de7af9eba27b5a63b6cd6",
+        "validation": "accepted"
+      },
+      {
+        "basename": "result.csv",
+        "byteCount": 3123,
+        "casUri": "casys://isolated-output/sha256/cf2d2525e2e7e12d0cea6147abfba34bc24407498f4c96ef9217a3a08c62070c",
+        "format": "openmodelica-result-csv",
+        "mediaType": "text/csv",
+        "persistence": "staged-reread-atomic-commit",
+        "role": "result",
+        "sha256": "cf2d2525e2e7e12d0cea6147abfba34bc24407498f4c96ef9217a3a08c62070c",
+        "validation": "accepted"
+      }
+    ],
+    "policy": {
+      "fingerprint": {
+        "algorithm": "sha256",
+        "digest": "f1ad74b2b32f67214dbcd02fd866fad0a781b881c7c5e05ae85767119f8ae214"
+      },
+      "id": "modelica-admitted-microsandbox-deny-all-v1",
+      "version": "1.0.0"
+    },
+    "producerGeneration": 0,
+    "profile": { "id": "modelica-closed-subset-v2", "version": "2.0.0" },
+    "publication": {
+      "ref": {
+        "fingerprint": {
+          "algorithm": "sha256",
+          "digest": "b368abc3a97ea75b94b5677d620aed0ca1467b88af0e5488017c5acc8ad821e9"
+        },
+        "manifestUri": "casys://isolated-output-publication/sha256/11e5c1265e59f96cd3735b16a2b539c4eba745f1e20e7b66c4d9b9e3af185343",
+        "producerGeneration": 0,
+        "runId": "admitted-modelica-a4bc00f6d99386da710ba342ff55ee19f023576d4662ceba930e254f049f2287"
+      },
+      "status": "atomic-batch-published"
+    },
+    "receiptSchemaVersion": "isolated-code-execution-receipt/1.0",
+    "runId": "admitted-modelica-a4bc00f6d99386da710ba342ff55ee19f023576d4662ceba930e254f049f2287",
+    "runtime": {
+      "imageDigest": {
+        "algorithm": "sha256",
+        "digest": "d25f220287cd8d1713e9e7d773afb8bb867fc5404a112e5e50ffa2e862fd6fdf"
+      },
+      "isolationClass": "microsandbox-local-microvm-v1",
+      "limitAssurance": {
+        "maxCpuTimeMs": "unattested",
+        "maxMemoryBytes": "backend-attested",
+        "maxOutputFileBytes": "broker-observed-cap",
+        "maxOutputTotalBytes": "broker-observed-cap",
+        "maxProcesses": "unattested",
+        "maxStderrBytes": "broker-observed-cap",
+        "maxStdoutBytes": "broker-observed-cap",
+        "maxWallTimeMs": "backend-attested"
+      },
+      "requestedLimits": {
+        "maxCpuTimeMs": 120000,
+        "maxMemoryBytes": 3221225472,
+        "maxOutputFileBytes": 16777216,
+        "maxOutputTotalBytes": 17825792,
+        "maxProcesses": 64,
+        "maxStderrBytes": 1048576,
+        "maxStdoutBytes": 1048576,
+        "maxWallTimeMs": 120000
+      }
+    },
+    "schemaVersion": "isolated-code-execution-receipt-record/1.0",
+    "sourceSha256": "e0f626508ca74c165eebc539de560cd72fd1c3b4a9bcb5088e9ab40adf9031cb",
+    "termination": { "exitCode": 0, "kind": "exited", "signal": null }
+  },
+  "scenario": {
+    "intervalS": 0.1,
+    "numberOfIntervals": 200,
+    "solver": "dassl",
+    "startTimeS": 0,
+    "stopTimeS": 20,
+    "tolerance": 0.000001
+  },
+  "schemaVersion": "modelica-admitted-execution-capture/2.0",
+  "sourceSha256": "e0f626508ca74c165eebc539de560cd72fd1c3b4a9bcb5088e9ab40adf9031cb"
+}

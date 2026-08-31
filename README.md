@@ -345,6 +345,18 @@ is buffered rather than lost. Provenance accepts only the registered
 recorded artifact identity to every projected run and verifies a separate SHA-256 over the raw
 canonical projection. It cannot relabel foreign evidence or derive detail from a fingerprint.
 
+The run resource alone also accepts `io.casys.mcp-modelica.recorded-admitted-execution-session/1.0`.
+That provider-owned adapter reads a Digital Thread `modelica-admitted-execution-capture/2.0`
+directly rather than manufacturing an mcp-modelica run envelope. It preserves the historical MCS01
+nested admission tuple `modelica-admitted-run-admission/3.0` +
+`technical-compilation-admission-capture/2.0` + `technical-compilation/1.0`, binds the visible
+`modelica-admitted-result-<sha256>` artifact to the capture, evidence, result, and admission
+identities, and verifies the canonical capture, receipt, publication, execution-run, source,
+runtime, and output joins before rendering. Its one default `modelica.admitted-run-summary`
+component keeps `ready-for-review`, `ready-for-execution-review`, `exited`, `proven`,
+`atomic-batch-published`, `accepted`, and `staged-reread-atomic-commit` literal. It does not turn
+exit code zero into `succeeded`, pass, proof, or a requirement verdict.
+
 The same provider-owned compatibility declaration is serialized at
 [`src/ui/view-app-manifest.json`](src/ui/view-app-manifest.json) and exported by the package as
 `./view-app-manifest`. It contains only the App identity and compatibility contract: no recorded
@@ -353,12 +365,14 @@ session, project anchor, provider endpoint, credentials, or live-tool policy.
 The run viewer advertises small, App-owned components rather than alternate size modes:
 `modelica.run-summary`, `modelica.run-identity`, `modelica.execution-status`, `modelica.metrics`,
 `modelica.parameters`, `modelica.provenance`, `modelica.artifacts`, and `modelica.warnings`. The
-run-list resource separately advertises `modelica.run-list`, `modelica.run-list-summary`, and
-`modelica.run-table`. Each standalone viewer uses a compact default surface: one run
-`SemanticElement`, or one navigable list of run rows. Identity, status, metrics, parameters,
-provenance, artifacts, warnings, and the tabular list remain in the catalog for host-negotiated
-composition. A compatible `@casys/mcp-compose` host may request a different explicit subset and safe
-stack/row/grid layout without inspecting the iframe DOM.
+schema-specific admitted capture keeps its one `modelica.admitted-run-summary` as an App-owned
+default rather than advertising it for incompatible run envelopes. The run-list resource separately
+advertises `modelica.run-list`, `modelica.run-list-summary`, and `modelica.run-table`. Each
+standalone viewer uses a compact default surface: one run `SemanticElement`, or one navigable list
+of run rows. Identity, status, metrics, parameters, provenance, artifacts, warnings, and the tabular
+list remain in the catalog for host-negotiated composition. A compatible `@casys/mcp-compose` host
+may request a different explicit subset and safe stack/row/grid layout without inspecting the iframe
+DOM.
 
 Every Modelica component now maps its domain data into the optional shared Preact presentation kit
 from `@casys/mcp-view-components/preact/components`. Compact surfaces use `SemanticElement` with
