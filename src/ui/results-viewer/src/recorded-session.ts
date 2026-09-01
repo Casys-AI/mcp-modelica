@@ -5,9 +5,10 @@ import {
   MODELICA_ADMITTED_EXECUTION_CAPTURE_SCHEMA,
   MODELICA_RECORDED_ADMITTED_EXECUTION_SESSION_SCHEMA,
 } from "./admitted-recorded-session.ts";
+import { VIEW_APP_MANIFEST_SCHEMA, VIEWER_SESSION_APPLY_ACTION } from "@casys/mcp-view-contracts";
 
-export const VIEW_APP_MANIFEST_SCHEMA = "io.casys.mcp.view-app-manifest/1.0" as const;
-export const VIEWER_SESSION_APPLY_ACTION = "viewer.session.apply" as const;
+/** Re-exported from the shared contract so these identities have a single source. */
+export { VIEW_APP_MANIFEST_SCHEMA, VIEWER_SESSION_APPLY_ACTION };
 export const MODELICA_RECORDED_VIEW_SESSION_SCHEMA =
   "io.casys.mcp-modelica.recorded-results-session/1.0" as const;
 
