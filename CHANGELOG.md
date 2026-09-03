@@ -2,6 +2,25 @@
 
 All notable changes to `@casys/mcp-modelica` are documented here.
 
+## [Unreleased]
+
+### Changed
+
+- The MCP View kit pin moves from `8fad891839203122efbe2438ba81a6e7d08c9202` to
+  `676a2c7379c6be9fe69a6b06da244178088b5e5a` (`@casys/mcp-view` 0.9.2, `@casys/mcp-view-components`
+  0.6.0) in the three workflows and the viewer lockfile.
+- The admitted execution viewer now reads as a datasheet: model name as identity, one metric grid,
+  titled Scenario / Parameters / Admission / Artifacts fact sections, provenance once — instead of
+  stacked status messages.
+- The documentation capture harness declares `locale: "en-US"` and container dimensions consistent
+  with the other providers; `--lang=en-US` and `--force-device-scale-factor=2` are now passed to
+  Chrome, which is also found at its macOS application path. The sandboxed App frame is kept in the
+  page's renderer (`--disable-features=IsolateSandboxedIframes`): in its own process the handshake
+  escaped the virtual-time budget and the capture showed the loading state. A missing executable now
+  fails as `CAPTURE_TOOL_MISSING`.
+- The README screenshot is regenerated from the committed bundle; the solver tolerance is printed in
+  scientific notation (`1E-6`) instead of rounding to `0`.
+
 ## [0.6.3] - 2026-08-31
 
 ### Fixed

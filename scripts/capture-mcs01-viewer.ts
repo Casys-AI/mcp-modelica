@@ -109,16 +109,24 @@ try {
     "/opt/homebrew/bin/chrome-headless-shell",
     "/usr/local/bin/chrome-headless-shell",
     "/usr/bin/chrome-headless-shell",
-  ]);
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  ], "CHROME_BIN");
   await run(chrome, [
-    "--headless",
+    "--headless=new",
     "--disable-background-networking",
+    // The sandboxed App frame must share the page's renderer: in its own process the
+    // handshake round-trip escapes the virtual-time budget and the frame is captured
+    // before the session lands.
+    "--disable-features=IsolateSandboxedIframes",
     "--disable-gpu",
     "--force-color-profile=srgb",
+    "--force-device-scale-factor=2",
     "--hide-scrollbars",
+    // Locale-sensitive formatting must not follow the capturing machine.
+    "--lang=en-US",
     "--run-all-compositor-stages-before-draw",
-    "--timeout=5000",
-    "--virtual-time-budget=5000",
+    "--timeout=8000",
+    "--virtual-time-budget=8000",
     "--window-size=1040,720",
     `--screenshot=${rawScreenshot}`,
     `http://127.0.0.1:${port}/`,
@@ -179,7 +187,14 @@ function documentationHostHtml(payload: unknown): string {
               protocolVersion: "2026-01-26",
               hostInfo: { name: "modelica-doc-capture-host", version: "1.0.0" },
               hostCapabilities: {},
-              hostContext: { theme: "light", displayMode: "inline", availableDisplayModes: ["inline"] },
+              hostContext: {
+                theme: "light",
+                displayMode: "inline",
+                availableDisplayModes: ["inline"],
+                locale: "en-US",
+                platform: "web",
+                containerDimensions: { width: 1040, maxHeight: 720 },
+              },
             },
           });
           return;
@@ -201,7 +216,10 @@ function documentationHostHtml(payload: unknown): string {
 </html>`;
 }
 
-async function findExecutable(candidates: readonly (string | undefined)[]): Promise<string> {
+async function findExecutable(
+  candidates: readonly (string | undefined)[],
+  variable = "FFMPEG_BIN",
+): Promise<string> {
   for (const candidate of candidates) {
     if (!candidate) continue;
     try {
@@ -211,9 +229,7 @@ async function findExecutable(candidates: readonly (string | undefined)[]): Prom
       // Try the next documented local executable.
     }
   }
-  throw new Error(
-    "Set CHROME_BIN to Chrome Headless Shell and FFMPEG_BIN to ffmpeg to capture the viewer.",
-  );
+  throw new Error(`CAPTURE_TOOL_MISSING set ${variable} to a local executable`);
 }
 
 async function run(command: string, args: readonly string[]): Promise<void> {
