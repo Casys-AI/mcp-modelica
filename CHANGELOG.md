@@ -7,8 +7,10 @@ All notable changes to `@casys/mcp-modelica` are documented here.
 ### Changed
 
 - The MCP View kit pin moves from `8fad891839203122efbe2438ba81a6e7d08c9202` to
-  `676a2c7379c6be9fe69a6b06da244178088b5e5a` (`@casys/mcp-view` 0.9.2, `@casys/mcp-view-components`
-  0.6.0) in the three workflows and the viewer lockfile.
+  `59eeb3750d2049b8141b09d3a6f29f66f9d3c657` (`@casys/mcp-view` 0.9.3, `@casys/mcp-view-components`
+  0.7.0) in the three workflows and the viewer lockfile. No behaviour change: this viewer keeps
+  `createMcpApp` with its own `onToolInput`, so the kit's 0.7.0 `startSurfaceApp` additions do not
+  apply to it.
 - The admitted execution viewer now reads as a datasheet: model name as identity, one metric grid,
   titled Scenario / Parameters / Admission / Artifacts fact sections, provenance once — instead of
   stacked status messages.
