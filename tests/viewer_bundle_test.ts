@@ -100,3 +100,16 @@ Deno.test("built run viewer contains the exact admitted-capture mono-object adap
   assert(html.includes("Admitted Modelica execution"));
   assert(html.includes("Recorded admitted Modelica anchor is not its exact result artifact."));
 });
+
+Deno.test("built run viewer renders the admitted execution as a datasheet, not status lines", async () => {
+  const html = await Deno.readTextFile(resultsViewerPath);
+  for (const section of ["Scenario", "Parameters", "Admission", "Artifacts"]) {
+    assert(html.includes(`"${section}"`), `run viewer must title a ${section} section`);
+  }
+  for (const statusLine of ["Admission: ", "Publication: ", "Cleanup: "]) {
+    assertEquals(html.includes(statusLine), false, `${statusLine}must not be a message line`);
+  }
+  // Solver tolerances are ~1e-6: four fraction digits would print them as 0.
+  assert(html.includes('"Tolerance"'), "run viewer must state the solver tolerance");
+  assert(html.includes('notation:"scientific"'), "the tolerance must keep its magnitude");
+});

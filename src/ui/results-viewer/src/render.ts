@@ -1,7 +1,7 @@
 import type { Quantity } from "./model.ts";
 
-export function formatMetricValue(value: number): string {
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(value);
+export function formatMetricValue(value: number, locale?: string): string {
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 4 }).format(value);
 }
 
 export function formatQuantity(quantity: Quantity): string {
