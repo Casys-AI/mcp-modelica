@@ -246,6 +246,29 @@ Deno.test("PathBar exists only for All runs to run navigation", () => {
   assertThrows(() => modelicaRunListPath("  "), TypeError, "Run path requires a run id");
 });
 
+Deno.test("admitted execution uses FocusedView, keeps every metric, and closes technical facts", async () => {
+  const admitted = await Deno.readTextFile(new URL("./admitted-components.tsx", import.meta.url));
+  assertStringIncludes(admitted, "FocusedView");
+  assertStringIncludes(admitted, "detailsLabel");
+  assertStringIncludes(admitted, "recorded");
+  assertStringIncludes(admitted, "documentary");
+  assertStringIncludes(admitted, "Technical details");
+  assertStringIncludes(admitted, 'notation: "scientific"');
+  assertStringIncludes(admitted, "maximumSignificantDigits: 3");
+  assertEquals(admitted.includes("MAX_METRICS_DISPLAYED"), false);
+  assertEquals(admitted.includes("slice(0, 12)"), false);
+  assertEquals(admitted.includes("startSurfaceApp"), false);
+  assertEquals(admitted.includes("ElementVerdict"), false);
+});
+
+Deno.test("admitted presentation remains English-first and status remount preserves lifecycle", async () => {
+  const app = await Deno.readTextFile(new URL("./app.ts", import.meta.url));
+  assertStringIncludes(app, 'status: () => app.navigate("status")');
+  assertEquals(app.includes("startSurfaceApp"), false);
+  assertEquals(app.includes("onlyThemeChanged"), false);
+  assertEquals(app.includes("themeUpdates"), false);
+});
+
 Deno.test("component sources keep detailed catalog, compact defaults, and no synthetic traces", async () => {
   const components = await Deno.readTextFile(new URL("./components.tsx", import.meta.url));
   const app = await Deno.readTextFile(new URL("./app.ts", import.meta.url));

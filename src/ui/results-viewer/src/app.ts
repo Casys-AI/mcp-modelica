@@ -307,7 +307,7 @@ function createAdmittedView(
       });
       const { node, target } = componentShell(
         "Admitted Modelica execution",
-        presentation.componentOnly,
+        true,
         recorded,
       );
       scheduleSurfaceMount(target, registry, data, ctx, presentation.surface);
@@ -494,6 +494,7 @@ export async function bootResultsViewer(options: ResultsViewerOptions): Promise<
         return;
       }
       await remountActiveWholeView(app.ctx.state.activeWholeView, {
+        status: () => app.navigate("status"),
         list: (envelope) => app.navigate("list", envelope),
         detail: (data) => app.navigate("detail", { resolvedDetail: data }),
       });

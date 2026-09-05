@@ -7,15 +7,16 @@ import type { ViewComponentRegistry } from "@casys/mcp-view-components";
 import { definePreactComponent } from "@casys/mcp-view-components/preact";
 import {
   ArtifactRow,
-  Badge,
   ElementBody,
   ElementIdent,
   ElementProvenance,
   ElementSection,
+  FocusedView,
   InlineCode,
   KeyValueList,
   MetricGrid,
   SemanticElement,
+  StateMessage,
 } from "@casys/mcp-view-components/preact/components";
 import type { ComponentChildren } from "preact";
 import type { ResultsViewerState } from "./app.ts";
@@ -36,9 +37,6 @@ function Facts({ items }: { readonly items: readonly Fact[] }) {
   return <KeyValueList layout="facts" items={items} />;
 }
 
-/** Metrics beyond this count are collapsed into a compact omitted note. */
-const MAX_METRICS_DISPLAYED = 6;
-
 export function createAdmittedRunComponentRegistry(): ViewComponentRegistry<
   ModelicaAdmittedExecutionViewData,
   ViewerContext
@@ -54,9 +52,7 @@ export function createAdmittedRunComponentRegistry(): ViewComponentRegistry<
           description:
             "One bounded documentary execution datasheet with readings, scenario, admission facts, and artifact provenance.",
         },
-        ({ data, context }) => (
-          <AdmittedRunSummary data={data} locale={context.hostContext.locale} />
-        ),
+        ({ data, context }) => <AdmittedRunSummary data={data} hostContext={context.hostContext} />,
       ),
     },
     defaultSurface: MODELICA_ADMITTED_RUN_DEFAULT_SURFACE,
@@ -65,51 +61,61 @@ export function createAdmittedRunComponentRegistry(): ViewComponentRegistry<
 
 function AdmittedRunSummary({
   data,
-  locale,
+  hostContext,
 }: {
   readonly data: ModelicaAdmittedExecutionViewData;
-  readonly locale: string | undefined;
+  readonly hostContext: ViewerContext["hostContext"];
 }) {
   const { capture } = data;
-  const displayedMetrics = capture.metrics.slice(0, MAX_METRICS_DISPLAYED);
-  const omitted = capture.metrics.length - displayedMetrics.length;
+  const locale = viewerLocale(hostContext.locale);
+  const status = admittedStatus(data);
 
   return (
-    <SemanticElement
-      reference={{
-        domain: "simulation",
-        kind: "artifact",
-        id: data.anchor.id,
-        basisFingerprint: data.anchor.fingerprint.digest,
-      }}
-      density="card"
-      ident={
-        <ElementIdent
-          marker={<Badge tone="neutral">{terminationLabel(capture.receipt.termination)}</Badge>}
-          label={capture.modelName}
-          detail={`Admitted execution · ${data.anchor.fingerprint.digest.slice(0, 12)}`}
+    <FocusedView
+      className="modelica-admitted-run"
+      label="Admitted Modelica execution"
+      hostContext={hostContext}
+      status={status.tone === "neutral"
+        ? undefined
+        : (
+          <StateMessage title={status.title} tone={status.tone}>
+            {status.facts.join(" · ")}
+          </StateMessage>
+        )}
+      primary={
+        <SemanticElement
+          reference={{
+            domain: "simulation",
+            kind: "artifact",
+            id: data.anchor.id,
+            basisFingerprint: data.anchor.fingerprint.digest,
+          }}
+          density="row"
+          ident={
+            <ElementIdent
+              marker={status.title}
+              label={capture.modelName}
+              detail={`Admitted execution · ${status.facts[0]}`}
+            />
+          }
+          body={
+            <ElementBody>
+              <MetricGrid
+                items={capture.metrics.map((metric) => ({
+                  id: `${metric.outputName}:${metric.statistic}`,
+                  label: metric.outputName,
+                  value: formatMetricValue(metric.value, locale),
+                  unit: metric.unit,
+                  detail: metric.statistic,
+                }))}
+              />
+            </ElementBody>
+          }
         />
       }
-      body={
+      detailsLabel="Technical details"
+      details={
         <ElementBody>
-          <MetricGrid
-            items={displayedMetrics.map((metric) => ({
-              id: `${metric.outputName}:${metric.statistic}`,
-              label: metric.outputName,
-              value: formatMetricValue(metric.value, locale),
-              unit: metric.unit,
-              detail: metric.statistic,
-            }))}
-          />
-          {omitted > 0 && (
-            <Facts
-              items={[{
-                id: "omitted",
-                label: "Omitted",
-                value: `${omitted} additional metric${omitted === 1 ? "" : "s"}`,
-              }]}
-            />
-          )}
           <ElementSection title="Scenario">
             <Facts items={scenarioFacts(capture.scenario, locale)} />
           </ElementSection>
@@ -133,16 +139,38 @@ function AdmittedRunSummary({
               />
             ))}
           </ElementSection>
+          <ElementSection title="Provenance">
+            <Facts items={provenanceFacts(data)} />
+          </ElementSection>
+          <ElementProvenance
+            label={data.recordedProvenance ? "Recorded capture" : "Capture projection"}
+            value={<InlineCode>{data.captureFingerprint.digest}</InlineCode>}
+          />
         </ElementBody>
-      }
-      provenance={
-        <ElementProvenance
-          label={data.recordedProvenance ? "Recorded capture" : "Capture projection"}
-          value={<InlineCode>{data.captureFingerprint.digest}</InlineCode>}
-        />
       }
     />
   );
+}
+
+function admittedStatus(data: ModelicaAdmittedExecutionViewData): {
+  readonly title: "recorded" | "documentary";
+  readonly tone: "neutral" | "warning" | "danger";
+  readonly facts: readonly string[];
+} {
+  const { capture } = data;
+  const termination = capture.receipt.termination;
+  const abnormalTermination = termination.kind !== "exited" || termination.exitCode !== 0;
+  const destructionUnattested = capture.receipt.destruction.status !== "proven";
+  return {
+    title: data.recordedProvenance ? "recorded" : "documentary",
+    tone: abnormalTermination ? "danger" : destructionUnattested ? "warning" : "neutral",
+    facts: [
+      `Termination: ${terminationLabel(termination)}`,
+      ...(capture.receipt.destruction.status === "proven"
+        ? []
+        : [`Destruction: ${capture.receipt.destruction.status}`]),
+    ],
+  };
 }
 
 function terminationLabel(
@@ -155,7 +183,7 @@ function terminationLabel(
 
 function scenarioFacts(
   scenario: ModelicaAdmittedExecutionViewData["capture"]["scenario"],
-  locale: string | undefined,
+  locale: string,
 ): Fact[] {
   const stopTimeValue = scenario.startTimeS !== 0
     ? `${formatMetricValue(scenario.startTimeS, locale)} – ${
@@ -181,7 +209,7 @@ function scenarioFacts(
 
 function parameterFacts(
   parameters: ModelicaAdmittedExecutionViewData["capture"]["parameters"],
-  locale: string | undefined,
+  locale: string,
 ): Fact[] {
   return parameters.map((param) => ({
     id: `param-${param.name}`,
@@ -199,7 +227,7 @@ function admissionFacts(
     {
       id: "source",
       label: "Source",
-      value: <InlineCode>{capture.sourceSha256.slice(0, 12)}</InlineCode>,
+      value: <InlineCode>{capture.sourceSha256}</InlineCode>,
     },
     {
       id: "compilation",
@@ -212,14 +240,46 @@ function admissionFacts(
   ];
 }
 
+function provenanceFacts(data: ModelicaAdmittedExecutionViewData): Fact[] {
+  const { capture } = data;
+  return [
+    { id: "project", label: "Project", value: <InlineCode>{capture.projectId}</InlineCode> },
+    { id: "agent-run", label: "Agent run", value: <InlineCode>{capture.agentRunId}</InlineCode> },
+    {
+      id: "execution-run",
+      label: "Execution run",
+      value: <InlineCode>{capture.executionRunId}</InlineCode>,
+    },
+    {
+      id: "operation",
+      label: "Operation",
+      value: `${capture.operation.id}@${capture.operation.version}`,
+    },
+    {
+      id: "result-anchor",
+      label: "Result anchor",
+      value: <InlineCode>{data.anchor.uri}</InlineCode>,
+    },
+  ];
+}
+
 /** Solver tolerances are tiny (1e-6): four fraction digits would print them as 0. */
-function formatTolerance(value: number, locale: string | undefined): string {
+function formatTolerance(value: number, locale: string): string {
   return new Intl.NumberFormat(locale, {
     notation: "scientific",
     maximumSignificantDigits: 3,
   }).format(value);
 }
 
-function formatBytes(value: number, locale: string | undefined): string {
+function formatBytes(value: number, locale: string): string {
   return new Intl.NumberFormat(locale).format(value);
+}
+
+/** Numeric facts preserve a valid host locale; bad or absent input is English. */
+function viewerLocale(locale: string | undefined): string {
+  try {
+    return Intl.getCanonicalLocales(locale ?? "")[0] ?? "en";
+  } catch {
+    return "en";
+  }
 }

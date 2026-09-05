@@ -5,37 +5,43 @@ import {
   remountActiveWholeView,
 } from "../src/ui/results-viewer/src/active-whole-view.ts";
 
-Deno.test("host-context remount keeps the resolved drill-down instead of returning to its list", async () => {
-  const seen: string[] = [];
-  const active: ActiveWholeView<string, string> = { name: "detail", data: "run-detail" };
-  await remountActiveWholeView(active, {
-    list: (value) => {
+function routes(seen: string[]) {
+  return {
+    status: () => {
+      seen.push("status");
+      return Promise.resolve();
+    },
+    list: (value: string) => {
       seen.push(`list:${value}`);
       return Promise.resolve();
     },
-    detail: (value) => {
+    detail: (value: string) => {
       seen.push(`detail:${value}`);
       return Promise.resolve();
     },
-  });
+  };
+}
+
+Deno.test("host-context remount keeps the resolved drill-down instead of returning to its list", async () => {
+  const seen: string[] = [];
+  const active: ActiveWholeView<string, string> = { name: "detail", data: "run-detail" };
+  await remountActiveWholeView(active, routes(seen));
   assertEquals(seen, ["detail:run-detail"]);
 });
 
 Deno.test("host-context remount does not revive a list while its detail is pending", () => {
   const seen: string[] = [];
   const active: ActiveWholeView<string, string> = { name: "pending-detail" };
-  const remount = remountActiveWholeView(active, {
-    list: (value) => {
-      seen.push(`list:${value}`);
-      return Promise.resolve();
-    },
-    detail: (value) => {
-      seen.push(`detail:${value}`);
-      return Promise.resolve();
-    },
-  });
+  const remount = remountActiveWholeView(active, routes(seen));
   assertEquals(remount, undefined);
   assertEquals(seen, []);
+});
+
+Deno.test("host-context remount refreshes the status view without touching list or detail", async () => {
+  const seen: string[] = [];
+  const active: ActiveWholeView<string, string> = { name: "status" };
+  await remountActiveWholeView(active, routes(seen));
+  assertEquals(seen, ["status"]);
 });
 
 Deno.test("new session generations defeat stale remounts and later remount the new display", async () => {

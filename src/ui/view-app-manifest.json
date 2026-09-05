@@ -3,7 +3,7 @@
   "app": {
     "id": "io.casys.mcp-modelica.results",
     "title": "Modelica results",
-    "version": "0.6.3"
+    "version": "0.6.4"
   },
   "resources": [
     {

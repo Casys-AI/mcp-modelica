@@ -8,10 +8,12 @@ export type ActiveWholeView<TList, TDetail> =
 export function remountActiveWholeView<TList, TDetail>(
   active: ActiveWholeView<TList, TDetail> | undefined,
   routes: {
+    readonly status: () => Promise<void>;
     readonly list: (envelope: TList) => Promise<void>;
     readonly detail: (data: TDetail) => Promise<void>;
   },
 ): Promise<void> | undefined {
+  if (active?.name === "status") return routes.status();
   if (active?.name === "list") return routes.list(active.envelope);
   if (active?.name === "detail") return routes.detail(active.data);
   return undefined;
