@@ -1,5 +1,8 @@
 name: Publish container image
 
+# Paired JSR publication is a separate tag workflow. Do not announce a verified
+# release here: .github/workflows/verify-published.yml runs only after both succeed.
+
 on:
   push:
     tags: ["v*"]
