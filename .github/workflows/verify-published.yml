@@ -1,0 +1,108 @@
+name: Verify published release
+
+on:
+  workflow_run:
+    workflows:
+      - Publish JSR
+      - Publish container image
+    types:
+      - completed
+
+permissions:
+  contents: read
+  actions: read
+  packages: read
+
+jobs:
+  verify:
+    if: >
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      (github.event.workflow_run.path == '.github/workflows/publish.yml' ||
+       github.event.workflow_run.path == '.github/workflows/publish-image.yml')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+    steps:
+      - name: Resolve the exact annotated tag commit
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_HINT: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$TAG_HINT" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "head_branch is not an exact vX.Y.Z tag hint" >&2
+            exit 1
+          fi
+          ref_json="$(curl -fsS \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "User-Agent: Casys-mcp-modelica-release-verifier" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG_HINT}")"
+          object_type="$(printf '%s' "$ref_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["object"]["type"])')"
+          object_sha="$(printf '%s' "$ref_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["object"]["sha"])')"
+          if [ "$object_type" = "commit" ]; then
+            commit="$object_sha"
+          elif [ "$object_type" = "tag" ]; then
+            tag_json="$(curl -fsS \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "User-Agent: Casys-mcp-modelica-release-verifier" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/tags/${object_sha}")"
+            peeled_type="$(printf '%s' "$tag_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["object"]["type"])')"
+            peeled_sha="$(printf '%s' "$tag_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["object"]["sha"])')"
+            test "$peeled_type" = "commit"
+            commit="$peeled_sha"
+          else
+            echo "unsupported git object type: ${object_type}" >&2
+            exit 1
+          fi
+          commit="$(printf '%s' "$commit" | tr 'A-F' 'a-f')"
+          head_sha="$(printf '%s' "$HEAD_SHA" | tr 'A-F' 'a-f')"
+          if [ "$commit" != "$head_sha" ]; then
+            echo "tag ${TAG_HINT} peels to ${commit}, not head_sha ${head_sha}" >&2
+            exit 1
+          fi
+          echo "tag=${TAG_HINT}" >> "$GITHUB_OUTPUT"
+          echo "commit=${commit}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ steps.release.outputs.commit }}
+          persist-credentials: false
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+        with:
+          deno-version: v2.9.6
+      - name: Verify published JSR and GHCR identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.release.outputs.tag }}
+          RELEASE_COMMIT: ${{ steps.release.outputs.commit }}
+          TRIGGER_WORKFLOW_PATH: ${{ github.event.workflow_run.path }}
+          TRIGGER_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          TRIGGER_EVENT: ${{ github.event.workflow_run.event }}
+          TRIGGER_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          TRIGGER_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          TRIGGER_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          mkdir -p verification
+          deno run --allow-net --allow-env --allow-read --allow-write=verification \
+            scripts/verify-published-release.ts \
+            --tag "$TAG_NAME" \
+            --commit "$RELEASE_COMMIT" \
+            --coordinate \
+            --evidence verification/published-release.json \
+            > verification/stdout.json
+      - name: Upload published-release verification evidence
+        if: success() && hashFiles('verification/published-release.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: published-release-verification
+          path: verification/published-release.json
+          if-no-files-found: error
+          retention-days: 90

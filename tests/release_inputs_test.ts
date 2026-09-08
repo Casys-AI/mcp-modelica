@@ -164,4 +164,64 @@ Deno.test("Docker release inputs are immutable and verified", async () => {
       publishJsrWorkflow.includes("2.9.6"),
     "The JSR release gate must use and verify the same qualified Deno runtime identity.",
   );
+  const readme = await Deno.readTextFile(new URL("../README.md", import.meta.url));
+  const verifyPublishedWorkflow = await Deno.readTextFile(
+    new URL("../.github/workflows/verify-published.yml", import.meta.url),
+  );
+  assert(
+    !readme.includes("forthcoming") &&
+      !/@sha256:[a-f0-9]{64}/.test(readme) &&
+      readme.includes(
+        "ghcr.io/casys-ai/mcp-modelica@${MODELICA_IMAGE_DIGEST:?set from verified evidence}",
+      ) &&
+      readme.includes(`ghcr.io/casys-ai/mcp-modelica:${packageVersion}`) &&
+      readme.includes(`jsr:@casys/mcp-modelica@${packageVersion}`) &&
+      /After the paired GHCR image\s+publication has succeeded/.test(readme) &&
+      /immutable GHCR index\s+digest/.test(readme),
+    "The packaged README must deploy a verified digest variable, not a mutable tag or historical pin.",
+  );
+  assert(
+    !publishWorkflow.includes("Published release") &&
+      !publishJsrWorkflow.includes("Published release") &&
+      verifyPublishedWorkflow.includes(
+        "workflows:\n      - Publish JSR\n      - Publish container image",
+      ) &&
+      verifyPublishedWorkflow.includes("types:\n      - completed") &&
+      verifyPublishedWorkflow.includes(
+        "github.event.workflow_run.head_repository.full_name == github.repository",
+      ) &&
+      verifyPublishedWorkflow.includes("github.event.workflow_run.event == 'push'") &&
+      verifyPublishedWorkflow.includes("github.event.workflow_run.conclusion == 'success'") &&
+      verifyPublishedWorkflow.includes(".github/workflows/publish.yml") &&
+      verifyPublishedWorkflow.includes(".github/workflows/publish-image.yml") &&
+      verifyPublishedWorkflow.includes("git/ref/tags/") &&
+      verifyPublishedWorkflow.includes("git/tags/") &&
+      verifyPublishedWorkflow.includes("persist-credentials: false") &&
+      verifyPublishedWorkflow.includes("ref: ${{ steps.release.outputs.commit }}") &&
+      verifyPublishedWorkflow.includes("scripts/verify-published-release.ts") &&
+      verifyPublishedWorkflow.includes("--coordinate") &&
+      verifyPublishedWorkflow.includes("--evidence verification/published-release.json") &&
+      verifyPublishedWorkflow.includes(
+        "deno run --allow-net --allow-env --allow-read --allow-write=verification",
+      ) &&
+      !verifyPublishedWorkflow.includes("deno task verify:published") &&
+      verifyPublishedWorkflow.includes("hashFiles('verification/published-release.json')") &&
+      verifyPublishedWorkflow.includes(
+        "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+      ) &&
+      verifyPublishedWorkflow.includes("contents: read") &&
+      !verifyPublishedWorkflow.includes("contents: write") &&
+      !verifyPublishedWorkflow.includes("workflow_dispatch") &&
+      verifyPublishedWorkflow.includes("deno-version: v2.9.6"),
+    "The post-publication verifier must authenticate the tag commit before checkout and archive evidence only after full success.",
+  );
+  assert(
+    developmentGuide.includes("post-publication verifier") &&
+      developmentGuide.includes("published `deno.json`") &&
+      developmentGuide.includes("annotated tag peel") &&
+      developmentGuide.includes("MODELICA_IMAGE_DIGEST") &&
+      /never announced\s+as verified/.test(developmentGuide) &&
+      !developmentGuide.includes("A later documentation-only commit may pin that digest on `main`"),
+    "Release documentation must sequence published-artifact proof after both registries succeed.",
+  );
 });

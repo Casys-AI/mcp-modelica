@@ -43,11 +43,13 @@ mkdir -p modelica-runs
 docker run --rm --name mcp-modelica \
   --publish 127.0.0.1:3016:3016 \
   --volume "$PWD/modelica-runs:/runs" \
-  ghcr.io/casys-ai/mcp-modelica@sha256:26bdf32513345e23233a9db7020f45675b4f029803e2f85204fbadd261491360
+  ghcr.io/casys-ai/mcp-modelica@${MODELICA_IMAGE_DIGEST:?set from verified evidence}
 ```
 
 Connect a Streamable HTTP MCP client to `http://127.0.0.1:3016/mcp`; the process health probe is
-`http://127.0.0.1:3016/health`. The command pins the signed, multi-architecture `0.6.4` image index.
+`http://127.0.0.1:3016/health`. After the paired GHCR image publication has succeeded, resolve the
+immutable GHCR index digest for `ghcr.io/casys-ai/mcp-modelica:0.6.4` and set
+`MODELICA_IMAGE_DIGEST` from that verified evidence. Deploy that digest rather than the mutable tag.
 
 With the same OpenModelica/MSL runtime already installed, JSR can launch either transport:
 
