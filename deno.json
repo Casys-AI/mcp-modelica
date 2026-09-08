@@ -47,7 +47,8 @@
     "model-schema:check": "deno run --allow-read=models --allow-run=omc scripts/derive-modelica-parameter-schema.ts --check",
     "kit-assets:generate": "deno run --allow-read=models,scenarios --allow-write=src/kits/generated-kit-assets.ts scripts/generate-kit-assets.ts",
     "kit-assets:check": "deno run --allow-read=models,scenarios,src/kits/generated-kit-assets.ts scripts/generate-kit-assets.ts --check",
-    "check": "deno task kit-assets:check && deno check mod.ts server.ts scripts/capture-mcs01-viewer.ts scripts/derive-modelica-parameter-schema.ts scripts/generate-kit-assets.ts",
+    "verify:published": "deno run --allow-net --allow-env --allow-read scripts/verify-published-release.ts",
+    "check": "deno task kit-assets:check && deno check mod.ts server.ts scripts/capture-mcs01-viewer.ts scripts/derive-modelica-parameter-schema.ts scripts/generate-kit-assets.ts scripts/verify-published-release.ts",
     "fmt": "deno fmt --check deno.json mod.ts server.ts src tests scripts models/CoffeeMachine.parameters.json",
     "lint": "deno lint mod.ts server.ts src tests scripts"
   },

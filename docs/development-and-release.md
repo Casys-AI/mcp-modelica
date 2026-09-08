@@ -106,9 +106,17 @@ workflows:
   provenance.
 - GHCR runs the same package/App gate, builds and smokes native AMD64, then publishes signed native
   AMD64 and ARM64 manifests.
+- After both publication workflows succeed, a post-publication verifier hashes the published OCI
+  index, native manifests, and configs against their advertised digests, binds the published README
+  to its JSR manifest checksum, and reads the published `deno.json` version. JSR version metadata
+  does not carry a git commit, so commit identity comes from the annotated tag peel and GHCR
+  revision labels, not from independent JSR provenance. A failed or partial check is never announced
+  as verified. Successful proof may keep a bounded read-only evidence artifact.
 
 Before tagging, verify the candidate commit is clean, the tag/version/CITATION/App identities agree,
-the source archive is complete, and `deno publish --dry-run` succeeds. After publication, verify the
-JSR version from a fresh empty directory and inspect/pull the immutable GHCR index digest. A later
-documentation-only commit may pin that digest on `main`; it must not be confused with the already
-tagged release candidate.
+the source archive is complete, and `deno publish --dry-run` succeeds. Do not embed this release's
+image digest in the tagged README: that digest exists only after GHCR publishes the index. The
+packaged README stays temporally neutral: the runnable `docker run` uses
+`MODELICA_IMAGE_DIGEST` from verified evidence, and the version tag appears only in the
+post-publication resolution explanation. Optional later operator notes must not be confused with the
+already tagged, already verified package documentation.

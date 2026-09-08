@@ -19,6 +19,11 @@ All notable changes to `@casys/mcp-modelica` are documented here.
   digest rather than reported absent. The recorded 2.0 fingerprint stays an input identity. Replay
   validates a present attestation strictly and continues to accept historical evidence that omits
   it.
+- A post-publication verifier, sequenced after both the JSR and GHCR tag workflows succeed, hashes
+  published OCI index/manifest/config bytes against their advertised digests, binds the published
+  README to its JSR checksum, and reads the published `deno.json` version. JSR metadata does not
+  prove git commit provenance independently. A failed or partial check is never announced as
+  verified.
 
 ### Changed
 
@@ -37,6 +42,9 @@ All notable changes to `@casys/mcp-modelica` are documented here.
   fails as `CAPTURE_TOOL_MISSING`.
 - The README screenshot is regenerated from the committed bundle; the solver tolerance is printed in
   scientific notation (`1E-6`) instead of rounding to `0`.
+- The packaged README uses temporally neutral deployment wording: the runnable `docker run` takes
+  `MODELICA_IMAGE_DIGEST` from verified evidence, the version tag is only a post-publication
+  resolution name, and no historical matching-image digest is presented as this package release.
 
 ## [0.6.3] - 2026-08-31
 
