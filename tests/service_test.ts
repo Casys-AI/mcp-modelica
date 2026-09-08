@@ -4,7 +4,6 @@ import { ValidationError } from "../src/domain/errors.ts";
 import { sha256, stableJson } from "../src/domain/hashing.ts";
 import type { ModelicaKit, SimulationRunner } from "../src/domain/types.ts";
 import { KitRegistry } from "../src/kits/registry.ts";
-import { loadCoffeeMachineKit } from "../src/kits/coffee-machine.ts";
 import { FakeRunner, installLegacyRunFixture, LEGACY_RUN_ID } from "./test-helpers.ts";
 
 Deno.test("modelica_kit_list exposes the physical kit and the honest solver-conformance kit", async () => {
@@ -138,8 +137,8 @@ Deno.test("simulation derives the server-owned model filename and loadFile from 
       2,
     ) + "\n";
     const secondKit: ModelicaKit = {
-      id: "second-plant-v1",
-      version: "1.0.0",
+      id: "coffee-machine-v1",
+      version: "0.1.0",
       description: "Independent second Modelica kit used to prove generic source naming.",
       modelName: "SecondPlant",
       modelSource: "model SecondPlant\n  Real x;\nend SecondPlant;\n",
@@ -176,7 +175,7 @@ Deno.test("simulation derives the server-owned model filename and loadFile from 
       },
     };
     const service = await createModelicaService({
-      registry: new KitRegistry([await loadCoffeeMachineKit(), secondKit]),
+      registry: new KitRegistry([secondKit]),
       runsDirectory: directory,
       runner: new FakeRunner({
         status: "succeeded",

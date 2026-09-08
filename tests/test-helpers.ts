@@ -1,5 +1,6 @@
 import { join } from "@std/path";
 import { stableJson } from "../src/domain/hashing.ts";
+import { QUALIFIED_KIT_RUNTIME } from "../src/domain/runtime-compatibility.ts";
 import type {
   EngineIdentity,
   LegacySimulationRun,
@@ -21,19 +22,17 @@ export const NOMINAL_CSV = [
 ].join("\n") + "\n";
 
 export class FakeRunner implements SimulationRunner {
-  private readonly identity = {
-    name: "FakeOpenModelica",
-    version: "test",
-    msl_version: "test",
-  };
+  private readonly output: RunnerOutput;
+  private readonly identity: EngineIdentity;
 
-  constructor(
-    private readonly output: RunnerOutput = {
+  constructor(output?: RunnerOutput, identity: EngineIdentity = { ...QUALIFIED_KIT_RUNTIME }) {
+    this.output = output ?? {
       status: "succeeded",
       diagnostics: "Fake runner: no physical simulation was performed.",
       resultCsv: NOMINAL_CSV,
-    },
-  ) {}
+    };
+    this.identity = identity;
+  }
 
   getRuntimeEngineIdentity(): Promise<EngineIdentity> {
     return Promise.resolve({ ...this.identity });

@@ -36,6 +36,13 @@ The qualified image contains:
 - Modelica Standard Library `4.1.0`
 - Deno `2.9.6`
 
+Each currently shipped kit identity (`coffee-machine-v1@0.1.0`, `linear-thermal-ramp-v1@0.1.0`) is
+qualified against that exact OpenModelica/MSL pair. The server probes the live runtime before
+dispatch and fails closed with machine-readable `runtime_incompatible` when native host state
+drifts. An unknown kit or version has no compatibility policy and fails closed as
+`compatibility-policy-unavailable`; future identities are not implicitly qualified. Historical run
+records are preserved; replay does not require the current image to match the sealed engine.
+
 Its Docker inputs are pinned by digest, the MSL archive is hash-verified, and the build asserts the
 actual Deno version. Native AMD64 and ARM64 CI runners build and smoke the final image separately;
 the release does not reuse QEMU-produced solver evidence.

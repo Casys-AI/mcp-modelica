@@ -1,5 +1,9 @@
 import type { ModelicaKit, SimulationResultNormalizer } from "../domain/types.ts";
 import { ValidationError } from "../domain/errors.ts";
+import {
+  assertShippedKitRuntimePolicies,
+  runtimeCompatibilityPolicy,
+} from "../domain/runtime-compatibility.ts";
 import { loadCoffeeMachineKit } from "./coffee-machine.ts";
 import { loadLinearThermalRampKit } from "./linear-thermal-ramp.ts";
 
@@ -58,6 +62,7 @@ function validateKitContracts(kits: readonly ModelicaKit[]): void {
     if (typeof kit.resultNormalizer.normalize !== "function") {
       throw new ValidationError(`${kitId}.resultNormalizer.normalize must be a function.`);
     }
+    runtimeCompatibilityPolicy(kit);
 
     const metricIds = new Set<string>();
     for (const metric of kit.producedMetrics) {
@@ -94,5 +99,7 @@ export async function createDefaultKitRegistry(): Promise<KitRegistry> {
     loadCoffeeMachineKit(),
     loadLinearThermalRampKit(),
   ]);
-  return new KitRegistry([coffeeMachine, linearThermalRamp]);
+  const registry = new KitRegistry([coffeeMachine, linearThermalRamp]);
+  assertShippedKitRuntimePolicies(registry.list());
+  return registry;
 }

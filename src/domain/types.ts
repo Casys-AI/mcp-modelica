@@ -146,11 +146,36 @@ export interface RunnerInput {
   timeoutMs: number;
 }
 
+/**
+ * Exact raw CSV byte identity captured before text decode or trim.
+ *
+ * Rejected captures keep the raw digest: invalid UTF-8 is not reported as
+ * absent while the solver bytes exist. Unavailable compiler seams have no CSV
+ * capture of their own.
+ */
+export type RunnerRawCsv =
+  | { status: "captured"; sha256: string }
+  | { status: "rejected"; sha256: string }
+  | { status: "absent" };
+
+export type RunnerRawOutput =
+  | {
+    capture: "captured";
+    stdout_sha256: string;
+    stderr_sha256: string;
+    result_csv: RunnerRawCsv;
+  }
+  | {
+    capture: "unavailable";
+    reason: "spawn_failed" | "timed_out_without_output" | "runner_seam";
+  };
+
 export interface RunnerOutput {
   status: RunStatus;
   diagnostics: string;
   resultCsv?: string;
   warnings?: string[];
+  rawOutput?: RunnerRawOutput;
 }
 
 export interface SimulationRunner {

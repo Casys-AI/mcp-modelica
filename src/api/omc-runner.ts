@@ -1,8 +1,11 @@
 import { join } from "@std/path";
+import { canonicalUtf8FromBytes } from "../domain/canonical-utf8.ts";
+import { sha256Bytes } from "../domain/hashing.ts";
 import type {
   EngineIdentity,
   RunnerInput,
   RunnerOutput,
+  RunnerRawOutput,
   SimulationRunner,
 } from "../domain/types.ts";
 
@@ -85,6 +88,7 @@ export class OpenModelicaRunner implements SimulationRunner {
       return {
         status: "failed",
         diagnostics: `Could not start ${this.command}: ${message(error)}`,
+        rawOutput: { capture: "unavailable", reason: "spawn_failed" },
       };
     }
 
@@ -103,32 +107,76 @@ export class OpenModelicaRunner implements SimulationRunner {
         // The process may have exited during the race; its captured output remains useful.
       }
       const completedOutput = await completed.catch(() => undefined);
+      if (!completedOutput) {
+        return {
+          status: "timed_out",
+          diagnostics: `OpenModelica exceeded the ${input.timeoutMs} ms timeout.`,
+          rawOutput: { capture: "unavailable", reason: "timed_out_without_output" },
+        };
+      }
+      const timedOutCapture = await capturedCompilerOutput(
+        completedOutput.output.stdout,
+        completedOutput.output.stderr,
+      );
       return {
         status: "timed_out",
-        diagnostics: completedOutput
-          ? diagnostics(completedOutput.output.stdout, completedOutput.output.stderr)
-          : `OpenModelica exceeded the ${input.timeoutMs} ms timeout.`,
+        diagnostics: diagnostics(completedOutput.output.stdout, completedOutput.output.stderr),
+        rawOutput: timedOutCapture,
       };
     }
 
     const output = outcome.output;
     const log = diagnostics(output.stdout, output.stderr);
+    const compilerCapture = await capturedCompilerOutput(output.stdout, output.stderr);
     if (!output.success) {
-      return { status: "failed", diagnostics: log };
+      return { status: "failed", diagnostics: log, rawOutput: compilerCapture };
     }
 
-    const resultCsv = await readResultCsv(input.runDirectory);
-    if (resultCsv === undefined) {
+    const rawCsv = await readResultCsvBytes(input.runDirectory);
+    if (rawCsv === undefined) {
       return {
         status: "failed",
         diagnostics: `${log}\nOpenModelica completed without producing a CSV result.`,
+        rawOutput: compilerCapture,
       };
     }
-    return { status: "succeeded", diagnostics: log, resultCsv };
+    try {
+      const canonical = await canonicalUtf8FromBytes(rawCsv, "result.csv");
+      return {
+        status: "succeeded",
+        diagnostics: log,
+        resultCsv: canonical.source,
+        rawOutput: {
+          ...compilerCapture,
+          result_csv: { status: "captured", sha256: canonical.digest },
+        },
+      };
+    } catch (error) {
+      return {
+        status: "failed",
+        diagnostics: `${log}\nOpenModelica CSV is not canonical UTF-8: ${message(error)}`,
+        rawOutput: {
+          ...compilerCapture,
+          result_csv: { status: "rejected", sha256: await sha256Bytes(rawCsv) },
+        },
+      };
+    }
   }
 }
 
-async function readResultCsv(runDirectory: string): Promise<string | undefined> {
+async function capturedCompilerOutput(
+  stdout: Uint8Array,
+  stderr: Uint8Array,
+): Promise<Extract<RunnerRawOutput, { capture: "captured" }>> {
+  return {
+    capture: "captured",
+    stdout_sha256: await sha256Bytes(stdout),
+    stderr_sha256: await sha256Bytes(stderr),
+    result_csv: { status: "absent" },
+  };
+}
+
+async function readResultCsvBytes(runDirectory: string): Promise<Uint8Array | undefined> {
   // The generated script names the OMC prefix "result", for which OMC's CSV
   // output is exactly result_res.csv. Never select a neighbouring CSV: it may
   // be a stale or unrelated file and must not become sealed simulation evidence.
@@ -146,7 +194,7 @@ async function readResultCsv(runDirectory: string): Promise<string | undefined> 
       `OpenModelica result CSV exceeds the ${MAX_RESULT_CSV_BYTES} byte safety limit.`,
     );
   }
-  return await Deno.readTextFile(path);
+  return await Deno.readFile(path);
 }
 
 function diagnostics(stdout: Uint8Array, stderr: Uint8Array): string {

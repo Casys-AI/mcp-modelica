@@ -66,14 +66,27 @@ remain protocol errors.
 `manifest.reissue_required` means the process-local manifest issuance is missing and directs the
 caller to obtain a fresh manifest from that same process.
 
+`runtime_incompatible` means the live OpenModelica/MSL probe does not match the exact shipped kit
+policy. `compatibility-policy-unavailable` means the selected kit id/version has no server-owned
+policy and is not implicitly qualified.
+
 ## Run identity
 
 - Artifact `sha256` identifies exact bytes.
 - Run `fingerprint` identifies the normalized execution contract: selected kit/scenario, resolved
-  parameters, engine, and normalizer.
+  parameters, engine, and normalizer. It is an input identity and does not bind raw solver output.
 - Recorded 2.0 separates native scenario bytes from the public scenario projection.
 - Resumable 2.1 additionally seals engine, conversions, lowering, and normalizer identities in the
   manifest before submission.
+- `evidence.json` may include optional `execution-attestation/1.0`. That binding records the input
+  fingerprint or 2.1 request identity, engine, generated-script digest, terminal status, and SHA-256
+  of the raw CSV and compiler stdout/stderr bytes captured before decode or trim. Raw CSV status is
+  `captured`, `rejected`, or `absent`: it attests the runner capture, not the presence of persisted
+  `result.csv`. A 2.1 normalization failure keeps the captured digest on the failed terminal record
+  without inventing that artifact. Invalid UTF-8 is `rejected` with the raw digest. Historical
+  evidence without the field stays readable; a present attestation is replayed strictly and a
+  malformed or mismatched attestation fails closed. The recorded fingerprint remains an input
+  identity and does not bind solver output.
 - Neither a digest, a successful OMC exit, nor a completed run is a requirement verdict.
 
 Completed replay treats the sealed OMC/MSL identity as historical evidence. It verifies the

@@ -2,6 +2,15 @@
 export { ModelicaToolsClient } from "./src/client.ts";
 export { ResumableSimulationToolsClient } from "./src/resumable-client.ts";
 export { OpenModelicaRunner } from "./src/api/omc-runner.ts";
+export {
+  EXECUTION_ATTESTATION_SCHEMA,
+  parseExecutionAttestation,
+} from "./src/domain/execution-attestation.ts";
+export {
+  COMPATIBILITY_POLICY_UNAVAILABLE_CODE,
+  QUALIFIED_KIT_RUNTIME,
+  RUNTIME_INCOMPATIBLE_CODE,
+} from "./src/domain/runtime-compatibility.ts";
 export { createModelicaService, ModelicaService } from "./src/domain/service.ts";
 export {
   ResumableSimulationService,
@@ -95,6 +104,8 @@ export type {
   Quantity,
   RunnerInput,
   RunnerOutput,
+  RunnerRawCsv,
+  RunnerRawOutput,
   RunStatus,
   SimulateInput,
   SimulationResultNormalizer,
