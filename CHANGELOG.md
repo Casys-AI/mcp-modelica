@@ -4,6 +4,8 @@ All notable changes to `@casys/mcp-modelica` are documented here.
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-09-08
+
 ### Added
 
 - Each currently shipped kit identity (`coffee-machine-v1@0.1.0`, `linear-thermal-ramp-v1@0.1.0`)
