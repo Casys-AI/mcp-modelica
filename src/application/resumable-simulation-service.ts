@@ -1,5 +1,11 @@
 import { ValidationError } from "../domain/errors.ts";
+import {
+  assertEvidenceDocument,
+  buildExecutionAttestation,
+  MODELICA_EVIDENCE_NOTE,
+} from "../domain/execution-attestation.ts";
 import { sha256, stableJson } from "../domain/hashing.ts";
+import { assertRuntimeCompatible } from "../domain/runtime-compatibility.ts";
 import {
   type ManifestIdentityInput,
   type ManifestResource,
@@ -24,6 +30,7 @@ import type {
   ModelicaKit,
   Quantity,
   RunnerOutput,
+  RunStatus,
   SimulationScenario,
 } from "../domain/types.ts";
 import { convertToModelica } from "../domain/units.ts";
@@ -97,10 +104,10 @@ export class ResumableSimulationService {
 
   async getManifest(rawInput: unknown): Promise<SimulationManifest> {
     const identity = parseManifestIdentityInput(rawInput);
-    const manifest = await this.buildManifest(
-      identity,
-      await this.method.getRuntimeEngineIdentity(),
-    );
+    const kit = this.method.getQualifiedKit(identity.model_id, identity.model_version);
+    const engine = await this.method.getRuntimeEngineIdentity();
+    assertRuntimeCompatible(kit, engine);
+    const manifest = await this.buildManifest(identity, engine);
     this.issuedManifestDigests.set(
       manifestIssuanceKey(identity),
       manifest.manifest_sha256,
@@ -240,13 +247,14 @@ export class ResumableSimulationService {
       // run_id/directory exists yet. Any later transition is fail-closed.
       const reservation = claimed.reservation ?? await this.store.adoptClaimReservation(current);
 
+      const engine = await this.method.getRuntimeEngineIdentity();
       const manifest = await this.buildManifest(
         {
           model_id: request.model_id,
           model_version: request.model_version,
           scenario_id: request.scenario_id,
         },
-        await this.method.getRuntimeEngineIdentity(),
+        engine,
       );
       if (request.manifest_sha256 !== manifest.manifest_sha256) {
         const rejected = await this.store.rejectClaim(
@@ -255,6 +263,7 @@ export class ResumableSimulationService {
         );
         return rejectionResult(rejected);
       }
+      assertRuntimeCompatible(kit, engine);
 
       const promotingClaim: SimulationRequestClaim = current.state === "promoting" ? current : {
         ...current,
@@ -370,7 +379,11 @@ export class ResumableSimulationService {
       try {
         execution = await this.workspace.execute(runId, request.timeout_ms);
       } catch (error) {
-        execution = { status: "failed", diagnostics: `Simulation runner threw: ${message(error)}` };
+        execution = {
+          status: "failed",
+          diagnostics: `Simulation runner threw: ${message(error)}`,
+          rawOutput: { capture: "unavailable", reason: "runner_seam" },
+        };
       }
       artifacts.push(
         await this.store.writeRunArtifact(
@@ -413,6 +426,11 @@ export class ResumableSimulationService {
         status = "failed";
         warnings.push("Simulation runner reported success without a CSV result.");
       }
+      const scriptArtifact = artifacts.find((artifact) => artifact.kind === "script");
+      const resultArtifact = artifacts.find((artifact) => artifact.kind === "result");
+      if (!scriptArtifact) {
+        throw new ValidationError("Resumable run is missing its generated script artifact.");
+      }
       const evidence = stableJson({
         producer: "mcp-modelica",
         status,
@@ -420,8 +438,19 @@ export class ResumableSimulationService {
         manifest_sha256: manifest.manifest_sha256,
         metrics,
         warnings,
-        note:
-          "This is computed evidence only. Requirement pass/fail belongs to mcp-syson and @casys/constraint-solver.",
+        note: MODELICA_EVIDENCE_NOTE,
+        execution_attestation: buildExecutionAttestation({
+          input: {
+            kind: "resumable_request",
+            request_id: request.request_id,
+            request_sha256: request.request_sha256,
+          },
+          engine: manifest.engine,
+          scriptSha256: scriptArtifact.sha256,
+          status,
+          rawOutput: execution.rawOutput,
+          resultCsvSha256: resultArtifact?.sha256,
+        }),
       });
       artifacts.push(
         await this.store.writeRunArtifact(
@@ -900,19 +929,42 @@ export class ResumableSimulationService {
       }
     }
     const evidence = artifacts.get("evidence");
-    const expectedEvidence = stableJson({
-      producer: "mcp-modelica",
-      status: run.status,
-      request_id: claim.request_id,
-      manifest_sha256: recordedManifest.manifest_sha256,
-      metrics: run.metrics,
-      warnings: run.warnings,
-      note:
-        "This is computed evidence only. Requirement pass/fail belongs to mcp-syson and @casys/constraint-solver.",
-    });
-    if (!evidence || evidence.source !== expectedEvidence) {
+    const script = artifacts.get("script");
+    const result = artifacts.get("result");
+    if (!evidence || !script) {
       throw new ValidationError(
         "Resumable evidence.json does not exactly attest the run status, metrics, warnings, request, and manifest.",
+      );
+    }
+    try {
+      assertEvidenceDocument(
+        evidence.source,
+        {
+          producer: "mcp-modelica",
+          status: run.status,
+          request_id: claim.request_id,
+          manifest_sha256: recordedManifest.manifest_sha256,
+          metrics: run.metrics,
+          warnings: run.warnings,
+          note: MODELICA_EVIDENCE_NOTE,
+        },
+        {
+          input: {
+            kind: "resumable_request",
+            request_id: claim.request_id,
+            request_sha256: claim.request_sha256,
+          },
+          engine: recordedManifest.engine,
+          scriptSha256: script.sha256,
+          status: run.status as RunStatus,
+          resultCsvSha256: result?.sha256,
+        },
+      );
+    } catch (error) {
+      throw new ValidationError(
+        `Resumable evidence.json does not exactly attest the run status, metrics, warnings, request, and manifest: ${
+          message(error)
+        }`,
       );
     }
     return validatedArtifacts.ledger;

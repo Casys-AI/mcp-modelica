@@ -4,15 +4,31 @@ All notable changes to `@casys/mcp-modelica` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Each currently shipped kit identity (`coffee-machine-v1@0.1.0`, `linear-thermal-ramp-v1@0.1.0`)
+  now has an explicit server-owned OpenModelica 1.27.0 / MSL 4.1.0 compatibility policy. Native host
+  drift fails closed as machine-readable `runtime_incompatible` before dispatch. An unknown kit or
+  version fails closed as `compatibility-policy-unavailable` and is not implicitly qualified.
+  Historical ledgers remain readable and are not rewritten.
+- New runs persist optional `execution-attestation/1.0` inside `evidence.json`, binding the existing
+  input fingerprint or 2.1 request identity, engine, generated-script digest, terminal status, and
+  SHA-256 of the raw CSV and compiler stdout/stderr bytes captured before decode or trim. Raw CSV
+  capture is distinct from persisted `result.csv`: a captured digest is retained when 2.1
+  normalization fails without writing that artifact, and invalid UTF-8 is `rejected` with the raw
+  digest rather than reported absent. The recorded 2.0 fingerprint stays an input identity. Replay
+  validates a present attestation strictly and continues to accept historical evidence that omits
+  it.
+
 ### Changed
 
-- The MCP View kit pin is `b08802df353bb25d25a1c8d64b22ea61b5287ae0`
-  (`@casys/mcp-view` 0.9.3, contracts 0.1.0, `@casys/mcp-view-components` 0.9.0) in the three
-  workflows and the viewer lockfile. The App keeps its own `createMcpApp` lifecycle.
+- The MCP View kit pin is `b08802df353bb25d25a1c8d64b22ea61b5287ae0` (`@casys/mcp-view` 0.9.3,
+  contracts 0.1.0, `@casys/mcp-view-components` 0.9.0) in the three workflows and the viewer
+  lockfile. The App keeps its own `createMcpApp` lifecycle.
 - The admitted execution viewer uses `FocusedView`: documentary/recorded state and termination
   remain visible, all recorded metrics stay primary, and scenario / parameters / admission /
-  artifacts / provenance are in a native closed technical disclosure. Labels remain English;
-  numeric formatting preserves a valid host locale and explicitly falls back to English.
+  artifacts / provenance are in a native closed technical disclosure. Labels remain English; numeric
+  formatting preserves a valid host locale and explicitly falls back to English.
 - The documentation capture harness declares `locale: "en-US"` and container dimensions consistent
   with the other providers; `--lang=en-US` and `--force-device-scale-factor=2` are now passed to
   Chrome, which is also found at its macOS application path. The sandboxed App frame is kept in the

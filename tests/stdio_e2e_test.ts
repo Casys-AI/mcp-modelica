@@ -1,5 +1,8 @@
 import { assert, assertEquals, assertExists } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
+import { parseExecutionAttestation } from "../src/domain/execution-attestation.ts";
+import { sha256Bytes } from "../src/domain/hashing.ts";
+import { QUALIFIED_KIT_RUNTIME } from "../src/domain/runtime-compatibility.ts";
 import { runtimeIdentityInstructions } from "../src/release-identity.ts";
 
 const FIXTURE = fromFileUrl(new URL("./fixtures/stdio_server.ts", import.meta.url));
@@ -197,21 +200,50 @@ Deno.test({
       }));
       assertEquals(simulated.error, undefined);
       const run = (simulated.result?.structuredContent as {
-        run: { status: string; artifacts: Array<{ kind: string; uri: string }> };
+        run: {
+          status: string;
+          fingerprint: string;
+          engine: { name: string; version: string; msl_version: string };
+          artifacts: Array<{ kind: string; uri: string; sha256: string }>;
+        };
       }).run;
       assertEquals(run.status, "succeeded");
+      assertEquals(run.engine, QUALIFIED_KIT_RUNTIME);
       const result = run.artifacts.find((artifact) => artifact.kind === "result");
       assertExists(result);
+      const evidenceArtifact = run.artifacts.find((artifact) => artifact.kind === "evidence");
+      assertExists(evidenceArtifact);
 
       const dynamicResources = await process.request(request(6, "resources/list"));
       const resources = dynamicResources.result?.resources as Array<{ uri: string }>;
       assert(resources.some((resource) => resource.uri === result.uri));
 
-      const evidence = await process.request(
+      const csvRead = await process.request(
         request(7, "resources/read", { uri: result.uri }),
       );
-      const csv = (evidence.result?.contents as Array<{ text: string }>)[0].text;
+      const csv = (csvRead.result?.contents as Array<{ text: string }>)[0].text;
       assert(csv.includes("waterTemperatureC"));
+      const evidenceRead = await process.request(
+        request(8, "resources/read", { uri: evidenceArtifact.uri }),
+      );
+      const evidenceText = (evidenceRead.result?.contents as Array<{ text: string }>)[0].text;
+      const attestation = parseExecutionAttestation(
+        JSON.parse(evidenceText).execution_attestation,
+      );
+      assertEquals(attestation.engine, QUALIFIED_KIT_RUNTIME);
+      assertEquals(attestation.input, {
+        kind: "recorded_fingerprint",
+        fingerprint: run.fingerprint,
+      });
+      assertEquals(attestation.raw_csv, {
+        status: "captured",
+        sha256: await sha256Bytes(new TextEncoder().encode(csv)),
+      });
+      assertEquals(attestation.compiler_output.status, "captured");
+      assertEquals(
+        attestation.script_sha256,
+        run.artifacts.find((artifact) => artifact.kind === "script")?.sha256,
+      );
     } finally {
       try {
         await process.close();

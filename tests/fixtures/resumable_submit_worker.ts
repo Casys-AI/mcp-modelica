@@ -1,5 +1,6 @@
 import { ResumableSimulationService } from "../../src/application/resumable-simulation-service.ts";
 import { createModelicaService } from "../../src/domain/service.ts";
+import { QUALIFIED_KIT_RUNTIME } from "../../src/domain/runtime-compatibility.ts";
 import type {
   EngineIdentity,
   RunnerInput,
@@ -13,11 +14,7 @@ import { NOMINAL_CSV } from "../test-helpers.ts";
 
 class SlowFakeRunner implements SimulationRunner {
   getRuntimeEngineIdentity(): Promise<EngineIdentity> {
-    return Promise.resolve({
-      name: "FakeOpenModelica",
-      version: "process-test",
-      msl_version: "test",
-    });
+    return Promise.resolve({ ...QUALIFIED_KIT_RUNTIME });
   }
 
   async execute(_input: RunnerInput): Promise<RunnerOutput> {

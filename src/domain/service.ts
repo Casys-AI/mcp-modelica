@@ -3,7 +3,13 @@ import { OpenModelicaRunner } from "../api/omc-runner.ts";
 import { createDefaultKitRegistry, KitRegistry } from "../kits/registry.ts";
 import { RunNotFoundError, ValidationError } from "./errors.ts";
 import { readCanonicalUtf8File, utf8Bytes } from "./canonical-utf8.ts";
+import {
+  assertRecordedEvidenceDocument,
+  buildExecutionAttestation,
+  MODELICA_EVIDENCE_NOTE,
+} from "./execution-attestation.ts";
 import { sha256, stableJson } from "./hashing.ts";
+import { assertRuntimeCompatible } from "./runtime-compatibility.ts";
 import { convertToModelica } from "./units.ts";
 import { parseModelicaParameterSchema } from "../kits/modelica-parameter-schema.ts";
 import { readKitAsset } from "../kits/kit-asset.ts";
@@ -178,6 +184,7 @@ export class ModelicaService {
     }
     const resolved = resolveParameters(kit, input.parameter_overrides ?? {});
     const engine = await this.getRuntimeEngineIdentity();
+    assertRuntimeCompatible(kit, engine);
     const modelHash = await sha256(kit.modelSource);
     if (!scenario.source) {
       throw new ValidationError(
@@ -296,6 +303,7 @@ export class ModelicaService {
       execution = {
         status: "failed",
         diagnostics: `Simulation runner threw: ${message(error)}`,
+        rawOutput: { capture: "unavailable", reason: "runner_seam" },
       };
     }
     await this.writeArtifact(
@@ -333,6 +341,11 @@ export class ModelicaService {
       warnings.push("Simulation runner reported success without a CSV result.");
     }
 
+    const scriptArtifact = artifacts.find((artifact) => artifact.kind === "script");
+    if (!scriptArtifact) {
+      throw new ValidationError("Simulation run is missing its generated script artifact.");
+    }
+    const resultArtifact = artifacts.find((artifact) => artifact.kind === "result");
     const evidence = {
       producer: "mcp-modelica",
       status,
@@ -344,8 +357,15 @@ export class ModelicaService {
       result_normalizer: resultNormalizerIdentity,
       metrics,
       warnings,
-      note:
-        "This is computed evidence only. Requirement pass/fail belongs to mcp-syson and @casys/constraint-solver.",
+      note: MODELICA_EVIDENCE_NOTE,
+      execution_attestation: buildExecutionAttestation({
+        input: { kind: "recorded_fingerprint", fingerprint },
+        engine,
+        scriptSha256: scriptArtifact.sha256,
+        status,
+        rawOutput: execution.rawOutput,
+        resultCsvSha256: resultArtifact?.sha256,
+      }),
     };
     await this.writeArtifact(
       runId,
@@ -403,6 +423,7 @@ export class ModelicaService {
       );
       const run = await parsePersistedSimulationRunRecord(source, runId);
       await this.assertRunKitIdentity(run);
+      if (isRecordedSimulationRun(run)) await this.assertRecordedExecutionAttestation(run);
       return run;
     } catch (error) {
       if (error instanceof Deno.errors.NotFound) throw new RunNotFoundError(runId);
@@ -695,6 +716,42 @@ export class ModelicaService {
         );
       }
     }
+  }
+
+  private async assertRecordedExecutionAttestation(run: SimulationRun): Promise<void> {
+    const evidenceArtifact = run.artifacts.find((artifact) => artifact.kind === "evidence");
+    const scriptArtifact = run.artifacts.find((artifact) => artifact.kind === "script");
+    const resultArtifact = run.artifacts.find((artifact) => artifact.kind === "result");
+    if (!evidenceArtifact || !scriptArtifact) {
+      throw new ValidationError(
+        `Persisted run '${run.run_id}' is missing its evidence or script artifact.`,
+      );
+    }
+    let evidence;
+    try {
+      evidence = await readCanonicalUtf8File(
+        join(this.runsDirectory, run.run_id, "evidence.json"),
+      );
+    } catch (error) {
+      if (error instanceof Deno.errors.NotFound) {
+        throw new ValidationError(
+          `Persisted run '${run.run_id}' evidence.json is missing.`,
+        );
+      }
+      throw error;
+    }
+    if (evidence.bytes !== evidenceArtifact.bytes || evidence.digest !== evidenceArtifact.sha256) {
+      throw new ValidationError(
+        `Artifact '${evidenceArtifact.uri}' no longer matches its persisted bytes and SHA-256 ledger.`,
+      );
+    }
+    assertRecordedEvidenceDocument(evidence.source, {
+      input: { kind: "recorded_fingerprint", fingerprint: run.fingerprint },
+      engine: run.engine,
+      scriptSha256: scriptArtifact.sha256,
+      status: run.status,
+      resultCsvSha256: resultArtifact?.sha256,
+    });
   }
 
   private async writeRunRecord(directory: string, run: SimulationRun): Promise<void> {

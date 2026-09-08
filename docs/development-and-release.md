@@ -70,8 +70,11 @@ deno task test:omc
 ```
 
 They execute both the historical simulation path and an exact resumable submit for both qualified
-kits. The Docker verification stage also runs the compiler-schema check and the real OS-lock /
-capacity smoke before the OMC integration tests.
+kits, and they assert the live OMC/MSL pair plus the raw runner-byte attestation against the
+captured CSV and script. The Docker verification stage also runs the compiler-schema check and the
+real OS-lock / capacity smoke before the OMC integration tests. Local `deno task test` skips those
+native gates when OpenModelica is absent; that skip is not native proof. Native AMD64 and ARM64 CI
+remains the gate for those paths.
 
 ## Generated Modelica assets
 
